@@ -1,0 +1,5 @@
+.env
+diffwatch.sqlite
+curls.sh
+.vscode
+curls.sh
