@@ -12,6 +12,11 @@ require (
 require (
 	github.com/antchfx/xpath v1.3.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/json-iterator/go v1.1.10 // indirect
+	github.com/mailgun/mailgun-go/v4 v4.15.2 // indirect
+	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
+	github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742 // indirect
+	github.com/pkg/errors v0.8.1 // indirect
 )
 
 require (

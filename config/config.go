@@ -14,8 +14,10 @@ type Config struct {
 	Env            string `env:"ENVIRONMENT"`
 	BasicAuthCreds string `env:"BASIC_AUTH_CREDS"`
 	Mailgun        struct {
-		Domain string `env:"MAILGUN_DOMAIN"`
-		APIKey string `env:"MAILGUN_API_KEY"`
+		APIKey      string `env:"MAILGUN_API_KEY"`
+		Domain      string `env:"MAILGUN_DOMAIN"`
+		SenderFrom  string `env:"MAILGUN_SENDER_FROM"`
+		TimeoutSecs int    `env:"MAILGUN_TIMEOUT_SECS"`
 	}
 
 	log   *zap.Logger
