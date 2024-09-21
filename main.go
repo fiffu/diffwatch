@@ -13,6 +13,7 @@ func main() {
 		fx.Provide(NewConfig),
 		fx.Provide(NewDatabase),
 		fx.Provide(NewTransport),
+		fx.Provide(NewSnapshotter),
 		fx.Provide(NewService),
 		fx.Provide(NewHTTPServer),
 

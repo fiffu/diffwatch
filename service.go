@@ -4,12 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
-	"strings"
 	"time"
 
-	"github.com/antchfx/htmlquery"
-	"github.com/carlmjohnson/requests"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -17,13 +13,13 @@ import (
 )
 
 type Service struct {
-	log       *zap.Logger
-	db        *gorm.DB
-	transport http.RoundTripper
+	log   *zap.Logger
+	db    *gorm.DB
+	snaps *Snapshotter
 }
 
-func NewService(lc fx.Lifecycle, log *zap.Logger, db *gorm.DB, transport http.RoundTripper) *Service {
-	return &Service{log, db, transport}
+func NewService(lc fx.Lifecycle, log *zap.Logger, db *gorm.DB, snaps *Snapshotter) *Service {
+	return &Service{log, db, snaps}
 }
 
 func (svc *Service) OnboardUser(ctx context.Context, email string, password string) (*User, error) {
@@ -123,7 +119,7 @@ func (svc *Service) Subscribe(ctx context.Context, userID uint, endpoint, xpath 
 }
 
 func (svc *Service) subscribeIfValidEndpoint(ctx context.Context, userID, notifierID uint, endpoint, xpath string) (*Subscription, string, error) {
-	content, err := svc.getEndpointContent(ctx, endpoint, xpath)
+	content, err := svc.snaps.GetEndpointContent(ctx, endpoint, xpath)
 	if err != nil {
 		return nil, "", err
 	}
@@ -142,22 +138,6 @@ func (svc *Service) subscribeIfValidEndpoint(ctx context.Context, userID, notifi
 		return nil, "", err
 	}
 	return sub, content, nil
-}
-
-func (svc *Service) getEndpointContent(ctx context.Context, endpoint, xpath string) (string, error) {
-	var s string
-	err := requests.URL(endpoint).
-		Transport(svc.transport).
-		ToString(&s).
-		Fetch(ctx)
-	doc, err := htmlquery.Parse(strings.NewReader(s))
-	if err != nil {
-		return "", err
-	}
-
-	node := htmlquery.FindOne(doc, xpath)
-	content := collectText(node)
-	return content, nil
 }
 
 func (svc *Service) FindSnapshot(ctx context.Context, userID, subscriptionID uint) (*Snapshot, error) {

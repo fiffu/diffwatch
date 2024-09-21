@@ -57,18 +57,22 @@ type NotifierConfirmation struct {
 
 type Subscription struct {
 	gorm.Model
-	UserID     uint
-	NotifierID uint
-	Endpoint   string `gorm:"index:idx_endpoint_xpath"` // Composite index on endpoint & xpath
-	XPath      string `gorm:"index:idx_endpoint_xpath"`
+	UserID         uint
+	NotifierID     uint
+	Endpoint       string `gorm:"index:idx_endpoint_xpath"` // Composite index on endpoint & xpath
+	XPath          string `gorm:"index:idx_endpoint_xpath"`
+	LastPollTime   sql.NullTime
+	NoContentSince sql.NullTime
 
 	Notifier Notifier
 }
 
+type Subscriptions []Subscription
+
 type Snapshot struct {
 	Timestamp      time.Time
-	UserID         uint
-	SubscriptionID uint
+	UserID         uint `gorm:"index:idx_user_subscription"`
+	SubscriptionID uint `gorm:"index:idx_user_subscription"`
 	Content        string
 	ContentDigest  string
 
@@ -76,7 +80,10 @@ type Snapshot struct {
 }
 
 func (s *Snapshot) BeforeCreate(tx *gorm.DB) error {
-	digest := fmt.Sprintf("%x", sha1.Sum([]byte(s.Content)))
-	s.ContentDigest = digest
+	s.ContentDigest = DigestContent(s.Content)
 	return nil
+}
+
+func DigestContent(content string) string {
+	return fmt.Sprintf("%x", sha1.Sum([]byte(content)))
 }

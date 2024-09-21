@@ -7,7 +7,7 @@ Get notified when URL + XPath changes.
 - [x] Create user
 - [x] Create subscription
 - [x] Take snapshot using URL and XPath
-- [ ] Cronjob to scrape subscriptions
+- [x] Cronjob to scrape subscriptions
 - [ ] Email integration to notify when subscription content changes
 - [ ] Other notification integrations, e.g. webhooks
 - [ ] Support JSON endpoints (workaround: support via [j2x-proxy](https://github.com/fiffu/j2x-proxy))

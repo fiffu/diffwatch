@@ -45,7 +45,6 @@ func router(cfg *Config, log *zap.Logger, svc *Service) http.Handler {
 
 	r.Route("/api", func(r chi.Router) {
 		if creds := cfg.GetCreds(); len(creds) > 0 {
-			log.Sugar().Info(creds)
 			r.Use(middleware.BasicAuth("diffwatch", creds))
 		} else {
 			log.Sugar().Info("Auth is disabled since no credentials are defined")
