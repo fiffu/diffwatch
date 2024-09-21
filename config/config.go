@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"errors"
@@ -13,6 +13,10 @@ import (
 type Config struct {
 	Env            string `env:"ENVIRONMENT"`
 	BasicAuthCreds string `env:"BASIC_AUTH_CREDS"`
+	Mailgun        struct {
+		Domain string `env:"MAILGUN_DOMAIN"`
+		APIKey string `env:"MAILGUN_API_KEY"`
+	}
 
 	log   *zap.Logger
 	creds map[string]string

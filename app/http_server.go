@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -8,13 +8,14 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/fiffu/diffwatch/config"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
-func NewHTTPServer(lc fx.Lifecycle, cfg *Config, log *zap.Logger, svc *Service) *http.Server {
+func NewHTTPServer(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, svc *Service) *http.Server {
 	srv := &http.Server{Addr: ":8080", Handler: router(cfg, log, svc)}
 
 	lc.Append(fx.Hook{
@@ -28,7 +29,7 @@ func NewHTTPServer(lc fx.Lifecycle, cfg *Config, log *zap.Logger, svc *Service) 
 	return srv
 }
 
-func router(cfg *Config, log *zap.Logger, svc *Service) http.Handler {
+func router(cfg *config.Config, log *zap.Logger, svc *Service) http.Handler {
 	ctrl := &controller{log, svc}
 
 	r := chi.NewRouter()
