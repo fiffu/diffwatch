@@ -8,7 +8,8 @@ Get notified when URL + XPath changes.
 - [x] Create subscription
 - [x] Take snapshot using URL and XPath
 - [x] Cronjob to scrape subscriptions
-- [ ] Email integration to notify when subscription content changes
+- [x] Email integration to notify when subscription content changes
+- [ ] Security checks, e.g. max retrievable content size
 - [ ] Other notification integrations, e.g. webhooks
 - [ ] Support JSON endpoints (workaround: support via [j2x-proxy](https://github.com/fiffu/j2x-proxy))
 

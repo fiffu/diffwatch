@@ -12,14 +12,15 @@ type mailgunSender struct {
 }
 
 func (e *mailgunSender) Send(ctx context.Context, subject, body, recipient string) (string, error) {
-	client := mailgun.NewMailgun(e.cfg.Mailgun.Domain, e.cfg.Mailgun.APIKey)
+	mg := mailgun.NewMailgun(e.cfg.Mailgun.Domain, e.cfg.Mailgun.APIKey)
+	mg.Client().Transport = e.transport
 
-	message := client.NewMessage(e.cfg.Mailgun.SenderFrom, subject, body, recipient)
+	message := mg.NewMessage(e.cfg.Mailgun.SenderFrom, subject, body, recipient)
 
 	timeout := time.Duration(e.cfg.Mailgun.TimeoutSecs) * time.Second
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	_, id, err := client.Send(ctx, message)
+	_, id, err := mg.Send(ctx, message)
 	return id, err
 }

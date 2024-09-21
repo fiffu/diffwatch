@@ -5,6 +5,7 @@ import (
 
 	"github.com/fiffu/diffwatch/app"
 	"github.com/fiffu/diffwatch/config"
+	"github.com/fiffu/diffwatch/senders"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -13,6 +14,9 @@ func main() {
 	fx.New(
 		fx.Provide(zap.NewProduction),
 		fx.Provide(config.NewConfig),
+
+		fx.Provide(senders.NewSenderRegistry),
+
 		fx.Provide(app.NewDatabase),
 		fx.Provide(app.NewTransport),
 		fx.Provide(app.NewSnapshotter),

@@ -2,6 +2,7 @@ package senders
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/fiffu/diffwatch/config"
 	"go.uber.org/fx"
@@ -12,16 +13,17 @@ type Sender interface {
 	Send(ctx context.Context, subject, body, recipient string) (string, error)
 }
 
-type SenderRegistry map[string]Sender
+type Registry map[string]Sender
 
-func NewSenderRegistry(lc fx.Lifecycle, log *zap.Logger, cfg *config.Config) SenderRegistry {
-	base := base{log, cfg}
+func NewSenderRegistry(lc fx.Lifecycle, log *zap.Logger, cfg *config.Config, transport http.RoundTripper) Registry {
+	base := base{log, cfg, transport}
 	return map[string]Sender{
 		"email": &mailgunSender{base},
 	}
 }
 
 type base struct {
-	log *zap.Logger
-	cfg *config.Config
+	log       *zap.Logger
+	cfg       *config.Config
+	transport http.RoundTripper
 }

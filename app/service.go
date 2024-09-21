@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fiffu/diffwatch/config"
+	"github.com/fiffu/diffwatch/senders"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -13,18 +15,23 @@ import (
 )
 
 type Service struct {
-	log   *zap.Logger
-	db    *gorm.DB
-	snaps *Snapshotter
+	cfg     *config.Config
+	log     *zap.Logger
+	db      *gorm.DB
+	snaps   *Snapshotter
+	senders senders.Registry
 }
 
-func NewService(lc fx.Lifecycle, log *zap.Logger, db *gorm.DB, snaps *Snapshotter) *Service {
-	return &Service{log, db, snaps}
+func NewService(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, db *gorm.DB, snaps *Snapshotter, senders senders.Registry) *Service {
+	return &Service{cfg, log, db, snaps, senders}
 }
 
 func (svc *Service) OnboardUser(ctx context.Context, email string, password string) (*User, error) {
 	user, confirmation, err := svc.createUserAndNotifier(email, password)
 	if err != nil {
+		return nil, err
+	}
+	if err = svc.sendVerificationEmail(ctx, email, confirmation.Nonce); err != nil {
 		return nil, err
 	}
 	svc.log.Sugar().Infof("Created user %v (%s), confimation nonce: %s", user.ID, email, confirmation.Nonce)
@@ -63,6 +70,24 @@ func (svc *Service) createUserAndNotifier(email string, password string) (*User,
 	}
 
 	return user, notifConfirm, nil
+}
+
+func (svc *Service) sendVerificationEmail(ctx context.Context, email, nonce string) error {
+	url := fmt.Sprintf("%s/verify/%s", svc.cfg.ServerDNS, nonce)
+
+	sender := svc.senders["email"]
+	id, err := sender.Send(
+		ctx,
+		"Diffwatch: Email verification required",
+		fmt.Sprintf(`Click here to verify your email: <a href="%s">%s</a>`, url),
+		email,
+	)
+	if err != nil {
+		svc.log.Sugar().Infow("Failed to send verification email", "err", err)
+	} else {
+		svc.log.Sugar().Infow("Sent verification to "+email, "message_id", id)
+	}
+	return err
 }
 
 func (svc *Service) generateNonce() string {

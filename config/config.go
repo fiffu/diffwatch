@@ -12,6 +12,7 @@ import (
 
 type Config struct {
 	Env            string `env:"ENVIRONMENT"`
+	ServerDNS      string `env:"SERVER_DNS"` // Used in verification email when adding a new notifier
 	BasicAuthCreds string `env:"BASIC_AUTH_CREDS"`
 	Mailgun        struct {
 		APIKey      string `env:"MAILGUN_API_KEY"`

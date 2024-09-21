@@ -10,6 +10,7 @@ import (
 
 	"github.com/antchfx/htmlquery"
 	"github.com/carlmjohnson/requests"
+	"github.com/fiffu/diffwatch/senders"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
@@ -17,7 +18,7 @@ import (
 
 var mu sync.Mutex
 
-func NewSnapshotter(lc fx.Lifecycle, db *gorm.DB, log *zap.Logger, transport http.RoundTripper) *Snapshotter {
+func NewSnapshotter(lc fx.Lifecycle, db *gorm.DB, log *zap.Logger, transport http.RoundTripper, senders senders.Registry) *Snapshotter {
 	wakeupInterval := 5 * time.Second
 	subscriptionPollAge := 1 * time.Hour // poll each subscription every hour
 	noContentTTL := 7 * 24 * time.Hour   // stop polling subscription if no data is returned for the past week
@@ -27,7 +28,7 @@ func NewSnapshotter(lc fx.Lifecycle, db *gorm.DB, log *zap.Logger, transport htt
 	var mu sync.Mutex
 
 	snapshotter := Snapshotter{
-		db, log, transport,
+		db, log, transport, senders,
 		&mu, concurrency, nil,
 		wakeupInterval, subscriptionPollAge, noContentTTL, snapshotTTL,
 	}
@@ -51,6 +52,7 @@ type Snapshotter struct {
 	db        *gorm.DB
 	log       *zap.Logger
 	transport http.RoundTripper
+	senders   senders.Registry
 
 	mu          *sync.Mutex
 	concurrency int
@@ -139,10 +141,11 @@ func (s *Snapshotter) findSubscriptionsForPoll(
 	s.db.
 		Where("no_content_since > ? AND last_poll_time <= ?", noContentCutoff, lastPollCutoff).
 		Or("last_poll_time IS NULL").
+		InnerJoins("Notifier").
 		FindInBatches(&subs, s.concurrency, func(tx *gorm.DB, batch int) error {
 			batchMetrics, errs := callbackPerBatch(ctx, subs)
 			if len(errs) > 0 {
-				s.log.Sugar().Errorf("snapshot: batch %d errors: %+v", batch, errs)
+				s.log.Sugar().Errorf("snapshot: batch errors: %+v", errs)
 			}
 
 			metrics.totalSelected += len(subs)
@@ -206,34 +209,66 @@ func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *Subscri
 	}
 }
 
-func (s *Snapshotter) handleContent(ctx context.Context, sub *Subscription, timestamp time.Time, content string) (bool, error) {
+func (s *Snapshotter) handleContent(ctx context.Context, sub *Subscription, timestamp time.Time, content string) (changed bool, err error) {
 	digest := DigestContent(content)
 
 	var count int64
 	var snap Snapshot
 	tx := s.db.Model(&snap).Where("subscription_id = ? AND content_digest = ?", sub.ID, digest).Count(&count)
-	if err := tx.Error; err != nil {
-		return false, tx.Error
+	if err = tx.Error; err != nil {
+		return
 	}
 
-	var changed bool
-	var tx2 *gorm.DB
 	if count == 1 {
-		changed = false
-		tx2 = s.db.Model(&snap).
-			Where("content_digest = ?", digest).
-			Update("timestamp", timestamp)
-	} else {
-		changed = true
-
-		snap.Timestamp = timestamp
-		snap.UserID = sub.UserID
-		snap.SubscriptionID = sub.ID
-		snap.Content = content
-		snap.ContentDigest = digest
-		tx2 = s.db.Create(&snap)
+		tx := s.db.Model(&snap).Where("content_digest = ?", digest).Update("timestamp", timestamp)
+		err = tx.Error
+		return
 	}
-	return changed, tx2.Error
+
+	changed = true
+	snap.Timestamp = timestamp
+	snap.UserID = sub.UserID
+	snap.SubscriptionID = sub.ID
+	snap.Content = content
+	snap.ContentDigest = digest
+
+	tx2 := s.db.Create(&snap)
+	if err = tx2.Error; err != nil {
+		return
+	} else {
+		err = s.sendUpdate(ctx, sub, content, digest)
+		return
+	}
+}
+
+func (s *Snapshotter) sendUpdate(ctx context.Context, sub *Subscription, content, digest string) error {
+	notifier := sub.Notifier
+
+	sender, ok := s.senders[notifier.Platform]
+	if !ok {
+		return fmt.Errorf("unsupported notifier platform: %s", notifier.Platform)
+	}
+
+	_, err := sender.Send(
+		ctx,
+		fmt.Sprintf("Diffwatch: new update on %s", sub.Endpoint),
+		fmt.Sprintf(
+			`
+				<h1>New changes on <a href="%s">%s</a>:</h1>
+				<br>
+				<pre>%s</pre>
+				<br>
+				Fingerprint: %s
+			`,
+			sub.Endpoint, sub.Endpoint,
+			content, digest,
+		),
+		notifier.PlatformIdentifier,
+	)
+	if err != nil {
+		s.log.Sugar().Infow("Failed to send update", "err", err)
+	}
+	return err
 }
 
 func (s *Snapshotter) handleEmptyContent(ctx context.Context, sub *Subscription, timestamp time.Time) error {
