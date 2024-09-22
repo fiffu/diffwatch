@@ -119,7 +119,7 @@ func (ctrl *controller) subscribe(w http.ResponseWriter, r *http.Request) {
 	endpoint := r.FormValue("endpoint")
 	xpath := r.FormValue("xpath")
 
-	snap, err := ctrl.svc.Subscribe(ctx, parseInt(userID), endpoint, xpath)
+	snap, err := ctrl.svc.CreateSubscription(ctx, parseInt(userID), endpoint, xpath)
 	if err != nil {
 		ctrl.reject(w, 500, err)
 		return
