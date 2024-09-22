@@ -5,12 +5,14 @@ import (
 	"net/http"
 
 	"github.com/fiffu/diffwatch/config"
+	"github.com/fiffu/diffwatch/lib/models"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
 type Sender interface {
-	Send(ctx context.Context, subject, body, recipient string) (string, error)
+	SendSnapshot(ctx context.Context, notifier *models.Notifier, sub *models.Subscription, snapshot *models.Snapshot) (string, error)
+	SendVerification(ctx context.Context, notifier *models.Notifier, verifyURL string) (string, error)
 }
 
 type Registry map[string]Sender

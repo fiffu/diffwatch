@@ -31,6 +31,8 @@ type NotifierConfirmation struct {
 	NotifierID uint
 	Nonce      string `gorm:"unique_index"`
 	Expiry     time.Time
+
+	Notifier Notifier
 }
 
 type Subscription struct {

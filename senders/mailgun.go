@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/fiffu/diffwatch/lib/models"
 	"github.com/mailgun/mailgun-go/v4"
 )
 
@@ -11,14 +12,18 @@ type mailgunSender struct {
 	base
 }
 
-func (e *mailgunSender) Send(ctx context.Context, subject, body, recipient string) (string, error) {
+type emailFormatter interface {
+	Subject() string
+	Body() string
+}
+
+func (e *mailgunSender) send(ctx context.Context, email emailFormatter, recipient string) (string, error) {
 	mg := mailgun.NewMailgun(e.cfg.Mailgun.Domain, e.cfg.Mailgun.APIKey)
 	mg.Client().Transport = e.transport
 
-	// Create message with empty body first.
-	message := mg.NewMessage(e.cfg.Mailgun.SenderFrom, subject, "", recipient)
-	// SetHtml with the payload proper. This will assign the MIME type properly.
-	message.SetHtml(body)
+	// Create message with empty body first, then use SetHtml which assigns the MIME type properly.
+	message := mg.NewMessage(e.cfg.Mailgun.SenderFrom, email.Subject(), "", recipient)
+	message.SetHtml(email.Body())
 
 	timeout := time.Duration(e.cfg.Mailgun.TimeoutSecs) * time.Second
 	ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -26,4 +31,14 @@ func (e *mailgunSender) Send(ctx context.Context, subject, body, recipient strin
 
 	_, id, err := mg.Send(ctx, message)
 	return id, err
+}
+
+func (e *mailgunSender) SendSnapshot(ctx context.Context, notifier *models.Notifier, sub *models.Subscription, snapshot *models.Snapshot) (string, error) {
+	formatter := &snapshotEmailFormat{sub, snapshot}
+	return e.send(ctx, formatter, notifier.PlatformIdentifier)
+}
+
+func (e *mailgunSender) SendVerification(ctx context.Context, notifier *models.Notifier, verifyURL string) (string, error) {
+	formatter := &verificationEmailFormat{verifyURL}
+	return e.send(ctx, formatter, notifier.PlatformIdentifier)
 }

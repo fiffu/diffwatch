@@ -47,7 +47,7 @@ func (svc *subscribe) CreateSubscription(ctx context.Context, userID uint, endpo
 	if err := tx.Error; err != nil {
 		return nil, err
 	}
-	svc.log.Sugar().Infof("Created subscription id:%v and snapshot:%v", sub.ID, snap.Timestamp)
+	svc.log.Sugar().Infof("Created subscription id:%v and snapshot:%v", sub.ID, snap.ContentDigest)
 	return &snap, nil
 }
 

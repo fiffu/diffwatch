@@ -15,6 +15,7 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var mu sync.Mutex
@@ -235,16 +236,16 @@ func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscriptio
 	snap.Content = content
 	snap.ContentDigest = digest
 
-	tx2 := s.db.Create(&snap)
+	tx2 := s.db.Clauses(clause.Returning{}).Create(&snap)
 	if err = tx2.Error; err != nil {
 		return
 	} else {
-		err = s.sendUpdate(ctx, sub, content, digest)
+		err = s.sendUpdate(ctx, sub, &snap)
 		return
 	}
 }
 
-func (s *Snapshotter) sendUpdate(ctx context.Context, sub *models.Subscription, content, digest string) error {
+func (s *Snapshotter) sendUpdate(ctx context.Context, sub *models.Subscription, snap *models.Snapshot) error {
 	notifier := sub.Notifier
 
 	sender, ok := s.senders[notifier.Platform]
@@ -252,22 +253,7 @@ func (s *Snapshotter) sendUpdate(ctx context.Context, sub *models.Subscription, 
 		return fmt.Errorf("unsupported notifier platform: %s", notifier.Platform)
 	}
 
-	_, err := sender.Send(
-		ctx,
-		fmt.Sprintf("Diffwatch: new update on %s", sub.Endpoint),
-		fmt.Sprintf(
-			`
-				<h1>New changes on <a href="%s">%s</a>:</h1>
-				<br>
-				<pre>%s</pre>
-				<br>
-				Fingerprint: %s
-			`,
-			sub.Endpoint, sub.Endpoint,
-			content, digest,
-		),
-		notifier.PlatformIdentifier,
-	)
+	_, err := sender.SendSnapshot(ctx, &notifier, sub, snap)
 	if err != nil {
 		s.log.Sugar().Infow("Failed to send update", "err", err)
 	}

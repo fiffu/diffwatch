@@ -24,6 +24,7 @@ func NewAPI(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, svc *lib.Servi
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			go srv.ListenAndServe()
+			log.Sugar().Infof("API server listening on %s", addr)
 			return nil
 		},
 		OnStop: srv.Shutdown,
