@@ -15,7 +15,10 @@ func (e *mailgunSender) Send(ctx context.Context, subject, body, recipient strin
 	mg := mailgun.NewMailgun(e.cfg.Mailgun.Domain, e.cfg.Mailgun.APIKey)
 	mg.Client().Transport = e.transport
 
-	message := mg.NewMessage(e.cfg.Mailgun.SenderFrom, subject, body, recipient)
+	// Create message with empty body first.
+	message := mg.NewMessage(e.cfg.Mailgun.SenderFrom, subject, "", recipient)
+	// SetHtml with the payload proper. This will assign the MIME type properly.
+	message.SetHtml(body)
 
 	timeout := time.Duration(e.cfg.Mailgun.TimeoutSecs) * time.Second
 	ctx, cancel := context.WithTimeout(ctx, timeout)
