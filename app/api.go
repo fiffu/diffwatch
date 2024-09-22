@@ -10,13 +10,14 @@ import (
 	"time"
 
 	"github.com/fiffu/diffwatch/config"
+	"github.com/fiffu/diffwatch/lib"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
 
-func NewHTTPServer(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, svc *Service) *http.Server {
+func NewAPI(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, svc *lib.Service) *http.Server {
 	addr := fmt.Sprintf(":%d", cfg.ServerPort)
 	srv := &http.Server{Addr: addr, Handler: router(cfg, log, svc)}
 
@@ -31,7 +32,7 @@ func NewHTTPServer(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, svc *Se
 	return srv
 }
 
-func router(cfg *config.Config, log *zap.Logger, svc *Service) http.Handler {
+func router(cfg *config.Config, log *zap.Logger, svc *lib.Service) http.Handler {
 	ctrl := &controller{log, svc}
 
 	r := chi.NewRouter()
@@ -66,7 +67,7 @@ func router(cfg *config.Config, log *zap.Logger, svc *Service) http.Handler {
 
 type controller struct {
 	log *zap.Logger
-	svc *Service
+	svc *lib.Service
 }
 
 func (ctrl *controller) reject(w http.ResponseWriter, status int, err error) {
