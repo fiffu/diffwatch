@@ -81,7 +81,7 @@ func (s *Snapshotter) Start() {
 			return
 
 		case batchStartTime := <-ticker.C:
-			s.collectSnapshots(ctx, batchStartTime)
+			s.collectSnapshots(ctx, batchStartTime.UTC())
 		}
 	}
 }
@@ -137,8 +137,8 @@ func (s *Snapshotter) findSubscriptionsForPoll(
 	var subs models.Subscriptions
 	var metrics = &snapshotMetrics{}
 	s.db.
-		Where("no_content_since > ? AND last_poll_time <= ?", noContentCutoff, lastPollCutoff).
-		Or("last_poll_time IS NULL").
+		Where("no_content_since IS NULL OR no_content_since > ?", noContentCutoff).
+		Where("last_poll_time IS NULL OR last_poll_time <= ?", lastPollCutoff).
 		InnerJoins("Notifier").
 		FindInBatches(&subs, s.concurrency, func(tx *gorm.DB, batch int) error {
 			batchMetrics, errs := callbackPerBatch(ctx, subs, batchStartTime)
