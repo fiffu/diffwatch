@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -16,7 +17,8 @@ import (
 )
 
 func NewHTTPServer(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, svc *Service) *http.Server {
-	srv := &http.Server{Addr: ":8080", Handler: router(cfg, log, svc)}
+	addr := fmt.Sprintf(":%d", cfg.ServerPort)
+	srv := &http.Server{Addr: addr, Handler: router(cfg, log, svc)}
 
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {

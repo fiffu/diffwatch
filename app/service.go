@@ -79,7 +79,7 @@ func (svc *Service) sendVerificationEmail(ctx context.Context, email, nonce stri
 	id, err := sender.Send(
 		ctx,
 		"Diffwatch: Email verification required",
-		fmt.Sprintf(`Click here to verify your email: <a href="%s">%s</a>`, url),
+		fmt.Sprintf(`Click here to verify your email: <a href="%s">%s</a>`, url, url),
 		email,
 	)
 	if err != nil {
