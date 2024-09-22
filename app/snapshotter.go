@@ -20,9 +20,9 @@ var mu sync.Mutex
 
 func NewSnapshotter(lc fx.Lifecycle, db *gorm.DB, log *zap.Logger, transport http.RoundTripper, senders senders.Registry) *Snapshotter {
 	wakeupInterval := 5 * time.Second
-	subscriptionPollAge := 1 * time.Hour // poll each subscription every hour
-	noContentTTL := 7 * 24 * time.Hour   // stop polling subscription if no data is returned for the past week
-	snapshotTTL := 14 * 24 * time.Hour   // each snapshot is only preserved for 1 week
+	subscriptionPollInterval := 1 * time.Hour // poll each subscription every hour
+	noContentTTL := 7 * 24 * time.Hour        // stop polling subscription if no data is returned for the past week
+	snapshotTTL := 14 * 24 * time.Hour        // each snapshot is only preserved for 1 week
 
 	concurrency := 5
 	var mu sync.Mutex
@@ -30,7 +30,7 @@ func NewSnapshotter(lc fx.Lifecycle, db *gorm.DB, log *zap.Logger, transport htt
 	snapshotter := Snapshotter{
 		db, log, transport, senders,
 		&mu, concurrency, nil,
-		wakeupInterval, subscriptionPollAge, noContentTTL, snapshotTTL,
+		wakeupInterval, subscriptionPollInterval, noContentTTL, snapshotTTL,
 	}
 
 	lc.Append(fx.Hook{
@@ -79,8 +79,8 @@ func (s *Snapshotter) Start() {
 			s.log.Sugar().Info("Snapshotter stopped")
 			return
 
-		case wakeupTime := <-ticker.C:
-			s.collectSnapshots(ctx, wakeupTime)
+		case batchStartTime := <-ticker.C:
+			s.collectSnapshots(ctx, batchStartTime)
 		}
 	}
 }
@@ -91,13 +91,13 @@ func (s *Snapshotter) Stop() {
 	}
 }
 
-func (s *Snapshotter) collectSnapshots(ctx context.Context, wakeupTime time.Time) {
+func (s *Snapshotter) collectSnapshots(ctx context.Context, batchStartTIme time.Time) {
 	mu.Lock()
 	defer mu.Unlock()
 
 	s.log.Sugar().Info("Snapshotter is waking up")
 
-	m := s.findSubscriptionsForPoll(ctx, wakeupTime, s.collectBatch)
+	m := s.findSubscriptionsForPoll(ctx, batchStartTIme, s.collectBatch)
 
 	if m.totalSelected == 0 {
 		s.log.Sugar().Infof("No subscriptions processed")
@@ -108,9 +108,9 @@ func (s *Snapshotter) collectSnapshots(ctx context.Context, wakeupTime time.Time
 		)
 	}
 
-	s.purgeOldSnapshots(ctx, wakeupTime)
+	s.purgeOldSnapshots(ctx, batchStartTIme)
 
-	elapsed := time.Now().UTC().Sub(wakeupTime)
+	elapsed := time.Now().UTC().Sub(batchStartTIme)
 	s.log.Sugar().Infof("Snapshotter finished after %d seconds", int(elapsed.Seconds()))
 }
 
@@ -130,11 +130,12 @@ func (m *snapshotMetrics) Add(other *snapshotMetrics) {
 }
 
 func (s *Snapshotter) findSubscriptionsForPoll(
-	ctx context.Context, now time.Time,
-	callbackPerBatch func(context.Context, Subscriptions) (*snapshotMetrics, []error),
+	ctx context.Context,
+	batchStartTime time.Time,
+	callbackPerBatch func(context.Context, Subscriptions, time.Time) (*snapshotMetrics, []error),
 ) *snapshotMetrics {
-	lastPollCutoff := now.Add(-s.subscriptionPollInterval)
-	noContentCutoff := now.Add(-s.noContentTTL)
+	lastPollCutoff := batchStartTime.Add(-s.subscriptionPollInterval)
+	noContentCutoff := batchStartTime.Add(-s.noContentTTL)
 
 	var subs Subscriptions
 	var metrics = &snapshotMetrics{}
@@ -143,7 +144,7 @@ func (s *Snapshotter) findSubscriptionsForPoll(
 		Or("last_poll_time IS NULL").
 		InnerJoins("Notifier").
 		FindInBatches(&subs, s.concurrency, func(tx *gorm.DB, batch int) error {
-			batchMetrics, errs := callbackPerBatch(ctx, subs)
+			batchMetrics, errs := callbackPerBatch(ctx, subs, batchStartTime)
 			if len(errs) > 0 {
 				s.log.Sugar().Errorf("snapshot: batch errors: %+v", errs)
 			}
@@ -157,7 +158,7 @@ func (s *Snapshotter) findSubscriptionsForPoll(
 	return metrics
 }
 
-func (s *Snapshotter) collectBatch(ctx context.Context, batch Subscriptions) (*snapshotMetrics, []error) {
+func (s *Snapshotter) collectBatch(ctx context.Context, batch Subscriptions, batchStartTime time.Time) (*snapshotMetrics, []error) {
 	var wg sync.WaitGroup
 	var metrics = &snapshotMetrics{}
 
@@ -173,6 +174,11 @@ func (s *Snapshotter) collectBatch(ctx context.Context, batch Subscriptions) (*s
 			}
 			metrics.Add(m)
 		}()
+	}
+
+	tx := s.db.Model(&batch).Update("last_poll_time", batchStartTime)
+	if err := tx.Error; err != nil {
+		errs = append(errs, err)
 	}
 
 	wg.Wait()
@@ -282,8 +288,8 @@ func (s *Snapshotter) handleEmptyContent(ctx context.Context, sub *Subscription,
 	}
 }
 
-func (s *Snapshotter) purgeOldSnapshots(ctx context.Context, timestamp time.Time) {
-	retentionCutoff := timestamp.Add(-s.snapshotTTL)
+func (s *Snapshotter) purgeOldSnapshots(ctx context.Context, batchStartTime time.Time) {
+	retentionCutoff := batchStartTime.Add(-s.snapshotTTL)
 
 	tx := s.db.Delete(&Snapshot{}, "timestamp < ?", retentionCutoff)
 	if err := tx.Error; err != nil {
