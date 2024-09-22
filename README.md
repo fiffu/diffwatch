@@ -9,6 +9,7 @@ Get notified when URL + XPath changes.
 - [x] Take snapshot using URL and XPath
 - [x] Cronjob to scrape subscriptions
 - [x] Email integration to notify when subscription content changes
+- [ ] Switch from sqlite to Postgres
 - [ ] Security checks, e.g. max retrievable content size
 - [ ] Other notification integrations, e.g. webhooks
 - [ ] Support JSON endpoints (workaround: support via [j2x-proxy](https://github.com/fiffu/j2x-proxy))
