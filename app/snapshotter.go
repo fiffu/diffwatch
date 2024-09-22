@@ -95,13 +95,9 @@ func (s *Snapshotter) collectSnapshots(ctx context.Context, batchStartTIme time.
 	mu.Lock()
 	defer mu.Unlock()
 
-	s.log.Sugar().Info("Snapshotter is waking up")
-
 	m := s.findSubscriptionsForPoll(ctx, batchStartTIme, s.collectBatch)
 
-	if m.totalSelected == 0 {
-		s.log.Sugar().Infof("No subscriptions processed")
-	} else {
+	if m.totalSelected > 0 {
 		s.log.Sugar().Infow(
 			fmt.Sprintf("Processed %d subscriptions", m.totalSelected),
 			"errored", m.errored, "updated", m.updated, "unchanged", m.unchanged, "empty", m.empty,
@@ -111,7 +107,7 @@ func (s *Snapshotter) collectSnapshots(ctx context.Context, batchStartTIme time.
 	s.purgeOldSnapshots(ctx, batchStartTIme)
 
 	elapsed := time.Now().UTC().Sub(batchStartTIme)
-	s.log.Sugar().Infof("Snapshotter finished after %d seconds", int(elapsed.Seconds()))
+	s.log.Sugar().Infow("Snapshotter completed", "elapsed_secs", int(elapsed.Seconds()))
 }
 
 type snapshotMetrics struct {
@@ -295,7 +291,9 @@ func (s *Snapshotter) purgeOldSnapshots(ctx context.Context, batchStartTime time
 	if err := tx.Error; err != nil {
 		s.log.Sugar().Errorf("purgeOldSnapshots error: %+v", err)
 	}
-	s.log.Sugar().Infof("Purged %d old snapshots", tx.RowsAffected)
+	if tx.RowsAffected > 0 {
+		s.log.Sugar().Infof("Purged %d old snapshots", tx.RowsAffected)
+	}
 	return
 }
 
