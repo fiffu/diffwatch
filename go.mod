@@ -4,8 +4,10 @@ go 1.22.5
 
 require (
 	github.com/antchfx/htmlquery v1.3.2
+	github.com/caarlos0/env/v11 v11.2.2
 	github.com/carlmjohnson/requests v0.24.2
 	github.com/go-chi/chi/v5 v5.1.0
+	github.com/mailgun/mailgun-go/v4 v4.15.2
 	golang.org/x/net v0.27.0
 )
 
@@ -13,14 +15,12 @@ require (
 	github.com/antchfx/xpath v1.3.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/json-iterator/go v1.1.10 // indirect
-	github.com/mailgun/mailgun-go/v4 v4.15.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
 )
 
 require (
-	github.com/caarlos0/env v3.5.0+incompatible
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-sqlite3 v1.14.23 // indirect

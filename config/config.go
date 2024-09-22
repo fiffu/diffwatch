@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/caarlos0/env"
+	"github.com/caarlos0/env/v11"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
