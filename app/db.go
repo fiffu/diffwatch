@@ -1,7 +1,7 @@
 package app
 
 import (
-	"github.com/fiffu/diffwatch/lib"
+	"github.com/fiffu/diffwatch/lib/models"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"gorm.io/driver/sqlite"
@@ -17,12 +17,12 @@ func NewDatabase(lc fx.Lifecycle, log *zap.Logger) *gorm.DB {
 
 	log.Info("Starting migrations")
 	db.AutoMigrate(
-		&lib.User{},
-		&lib.Notifier{},
-		&lib.NotifierConfirmation{},
-		&lib.Subscription{},
-		&lib.User{},
-		&lib.Snapshot{},
+		&models.User{},
+		&models.Notifier{},
+		&models.NotifierConfirmation{},
+		&models.Subscription{},
+		&models.User{},
+		&models.Snapshot{},
 	)
 	return db
 }

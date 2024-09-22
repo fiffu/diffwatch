@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/fiffu/diffwatch/config"
+	"github.com/fiffu/diffwatch/lib/models"
 	"github.com/fiffu/diffwatch/senders"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -26,7 +27,7 @@ func NewService(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, db *gorm.D
 	return &Service{cfg, log, db, snaps, senders}
 }
 
-func (svc *Service) OnboardUser(ctx context.Context, email string, password string) (*User, error) {
+func (svc *Service) OnboardUser(ctx context.Context, email string, password string) (*models.User, error) {
 	user, confirmation, err := svc.createUserAndNotifier(email, password)
 	if err != nil {
 		return nil, err
@@ -38,8 +39,8 @@ func (svc *Service) OnboardUser(ctx context.Context, email string, password stri
 	return user, nil
 }
 
-func (svc *Service) createUserAndNotifier(email string, password string) (*User, *NotifierConfirmation, error) {
-	user := &User{
+func (svc *Service) createUserAndNotifier(email string, password string) (*models.User, *models.NotifierConfirmation, error) {
+	user := &models.User{
 		Username: email,
 		Password: password,
 	}
@@ -50,7 +51,7 @@ func (svc *Service) createUserAndNotifier(email string, password string) (*User,
 		return nil, nil, err
 	}
 
-	notif := &Notifier{Platform: "email", PlatformIdentifier: email, UserID: user.ID}
+	notif := &models.Notifier{Platform: "email", PlatformIdentifier: email, UserID: user.ID}
 	tx = svc.db.
 		Clauses(clause.Returning{}).
 		Create(notif)
@@ -59,7 +60,7 @@ func (svc *Service) createUserAndNotifier(email string, password string) (*User,
 	}
 
 	nonce := svc.generateNonce()
-	notifConfirm := &NotifierConfirmation{
+	notifConfirm := &models.NotifierConfirmation{
 		NotifierID: notif.ID,
 		Nonce:      nonce,
 		Expiry:     time.Now().UTC().Add(3 * 24 * time.Hour),
@@ -97,7 +98,7 @@ func (svc *Service) generateNonce() string {
 }
 
 func (svc *Service) VerifyNotifier(ctx context.Context, nonce string) (bool, error) {
-	confirm := NotifierConfirmation{}
+	confirm := models.NotifierConfirmation{}
 	tx := svc.db.Where("nonce = ?", nonce).First(&confirm)
 	if err := tx.Error; errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
@@ -105,7 +106,7 @@ func (svc *Service) VerifyNotifier(ctx context.Context, nonce string) (bool, err
 		return false, err
 	}
 
-	tx = svc.db.Model(&Notifier{}).Where("id = ?", confirm.NotifierID).Update("verified", true)
+	tx = svc.db.Model(&models.Notifier{}).Where("id = ?", confirm.NotifierID).Update("verified", true)
 	if err := tx.Error; err != nil {
 		return false, err
 	}
@@ -113,8 +114,8 @@ func (svc *Service) VerifyNotifier(ctx context.Context, nonce string) (bool, err
 	return true, nil
 }
 
-func (svc *Service) Subscribe(ctx context.Context, userID uint, endpoint, xpath string) (*Snapshot, error) {
-	notifier := Notifier{}
+func (svc *Service) Subscribe(ctx context.Context, userID uint, endpoint, xpath string) (*models.Snapshot, error) {
+	notifier := models.Notifier{}
 	tx := svc.db.Where("user_id = ?", userID).First(&notifier)
 	if err := tx.Error; err != nil {
 		return nil, err
@@ -129,7 +130,7 @@ func (svc *Service) Subscribe(ctx context.Context, userID uint, endpoint, xpath 
 		return nil, err
 	}
 
-	snap := Snapshot{
+	snap := models.Snapshot{
 		Timestamp:      time.Now().UTC(),
 		UserID:         userID,
 		SubscriptionID: sub.ID,
@@ -143,7 +144,7 @@ func (svc *Service) Subscribe(ctx context.Context, userID uint, endpoint, xpath 
 	return &snap, nil
 }
 
-func (svc *Service) subscribeIfValidEndpoint(ctx context.Context, userID, notifierID uint, endpoint, xpath string) (*Subscription, string, error) {
+func (svc *Service) subscribeIfValidEndpoint(ctx context.Context, userID, notifierID uint, endpoint, xpath string) (*models.Subscription, string, error) {
 	content, err := svc.snaps.GetEndpointContent(ctx, endpoint, xpath)
 	if err != nil {
 		return nil, "", err
@@ -152,7 +153,7 @@ func (svc *Service) subscribeIfValidEndpoint(ctx context.Context, userID, notifi
 		return nil, "", fmt.Errorf("no result extracted from %s using xpath: %s", endpoint, xpath)
 	}
 
-	sub := &Subscription{
+	sub := &models.Subscription{
 		UserID:     userID,
 		NotifierID: notifierID,
 		Endpoint:   endpoint,
@@ -165,8 +166,8 @@ func (svc *Service) subscribeIfValidEndpoint(ctx context.Context, userID, notifi
 	return sub, content, nil
 }
 
-func (svc *Service) FindSnapshot(ctx context.Context, userID, subscriptionID uint) (*Snapshot, error) {
-	snap := &Snapshot{}
+func (svc *Service) FindSnapshot(ctx context.Context, userID, subscriptionID uint) (*models.Snapshot, error) {
+	snap := &models.Snapshot{}
 	tx := svc.db.
 		Where("user_id = ?", userID).
 		Where("subscription_id = ?", subscriptionID).

@@ -10,6 +10,7 @@ import (
 
 	"github.com/antchfx/htmlquery"
 	"github.com/carlmjohnson/requests"
+	"github.com/fiffu/diffwatch/lib/models"
 	"github.com/fiffu/diffwatch/senders"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -128,12 +129,12 @@ func (m *snapshotMetrics) Add(other *snapshotMetrics) {
 func (s *Snapshotter) findSubscriptionsForPoll(
 	ctx context.Context,
 	batchStartTime time.Time,
-	callbackPerBatch func(context.Context, Subscriptions, time.Time) (*snapshotMetrics, []error),
+	callbackPerBatch func(context.Context, models.Subscriptions, time.Time) (*snapshotMetrics, []error),
 ) *snapshotMetrics {
 	lastPollCutoff := batchStartTime.Add(-s.subscriptionPollInterval)
 	noContentCutoff := batchStartTime.Add(-s.noContentTTL)
 
-	var subs Subscriptions
+	var subs models.Subscriptions
 	var metrics = &snapshotMetrics{}
 	s.db.
 		Where("no_content_since > ? AND last_poll_time <= ?", noContentCutoff, lastPollCutoff).
@@ -154,7 +155,7 @@ func (s *Snapshotter) findSubscriptionsForPoll(
 	return metrics
 }
 
-func (s *Snapshotter) collectBatch(ctx context.Context, batch Subscriptions, batchStartTime time.Time) (*snapshotMetrics, []error) {
+func (s *Snapshotter) collectBatch(ctx context.Context, batch models.Subscriptions, batchStartTime time.Time) (*snapshotMetrics, []error) {
 	var wg sync.WaitGroup
 	var metrics = &snapshotMetrics{}
 
@@ -181,7 +182,7 @@ func (s *Snapshotter) collectBatch(ctx context.Context, batch Subscriptions, bat
 	return metrics, errs
 }
 
-func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *Subscription) (*snapshotMetrics, error) {
+func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *models.Subscription) (*snapshotMetrics, error) {
 	var m = &snapshotMetrics{}
 	content, err := s.GetEndpointContent(ctx, sub.Endpoint, sub.XPath)
 	if err != nil {
@@ -211,11 +212,11 @@ func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *Subscri
 	}
 }
 
-func (s *Snapshotter) handleContent(ctx context.Context, sub *Subscription, timestamp time.Time, content string) (changed bool, err error) {
-	digest := DigestContent(content)
+func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscription, timestamp time.Time, content string) (changed bool, err error) {
+	digest := models.DigestContent(content)
 
 	var count int64
-	var snap Snapshot
+	var snap models.Snapshot
 	tx := s.db.Model(&snap).Where("subscription_id = ? AND content_digest = ?", sub.ID, digest).Count(&count)
 	if err = tx.Error; err != nil {
 		return
@@ -243,7 +244,7 @@ func (s *Snapshotter) handleContent(ctx context.Context, sub *Subscription, time
 	}
 }
 
-func (s *Snapshotter) sendUpdate(ctx context.Context, sub *Subscription, content, digest string) error {
+func (s *Snapshotter) sendUpdate(ctx context.Context, sub *models.Subscription, content, digest string) error {
 	notifier := sub.Notifier
 
 	sender, ok := s.senders[notifier.Platform]
@@ -273,7 +274,7 @@ func (s *Snapshotter) sendUpdate(ctx context.Context, sub *Subscription, content
 	return err
 }
 
-func (s *Snapshotter) handleEmptyContent(ctx context.Context, sub *Subscription, timestamp time.Time) error {
+func (s *Snapshotter) handleEmptyContent(ctx context.Context, sub *models.Subscription, timestamp time.Time) error {
 	if sub.NoContentSince.Valid {
 		// Don't do anything if we already observed empty content on this subscription
 		return nil
@@ -287,7 +288,7 @@ func (s *Snapshotter) handleEmptyContent(ctx context.Context, sub *Subscription,
 func (s *Snapshotter) purgeOldSnapshots(ctx context.Context, batchStartTime time.Time) {
 	retentionCutoff := batchStartTime.Add(-s.snapshotTTL)
 
-	tx := s.db.Delete(&Snapshot{}, "timestamp < ?", retentionCutoff)
+	tx := s.db.Delete(&models.Snapshot{}, "timestamp < ?", retentionCutoff)
 	if err := tx.Error; err != nil {
 		s.log.Sugar().Errorf("purgeOldSnapshots error: %+v", err)
 	}
