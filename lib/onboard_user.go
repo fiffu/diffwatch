@@ -65,7 +65,7 @@ func (svc *onboardUser) createUserAndNotifier(email string, password string) (*m
 }
 
 func (svc *onboardUser) sendVerificationEmail(ctx context.Context, verification *models.NotifierConfirmation) error {
-	verifyURL := fmt.Sprintf("%s/verify/%s", svc.cfg.ServerDNS, verification.Nonce)
+	verifyURL := fmt.Sprintf("https://%s/verify/%s", svc.cfg.ServerDNS, verification.Nonce)
 
 	sender := svc.senders["email"]
 	id, err := sender.SendVerification(
