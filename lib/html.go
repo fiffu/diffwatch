@@ -1,4 +1,4 @@
-package snapshotter
+package lib
 
 import (
 	"bytes"

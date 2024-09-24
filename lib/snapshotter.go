@@ -1,4 +1,4 @@
-package snapshotter
+package lib
 
 import (
 	"context"
@@ -257,12 +257,12 @@ func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscriptio
 	if err = tx2.Error; err != nil {
 		return
 	} else {
-		err = s.sendUpdate(ctx, sub, &snap)
+		err = s.SendSnapshot(ctx, sub, &snap)
 		return
 	}
 }
 
-func (s *Snapshotter) sendUpdate(ctx context.Context, sub *models.Subscription, snap *models.Snapshot) error {
+func (s *Snapshotter) SendSnapshot(ctx context.Context, sub *models.Subscription, snap *models.Snapshot) error {
 	notifier := sub.Notifier
 
 	sender, ok := s.senders[notifier.Platform]

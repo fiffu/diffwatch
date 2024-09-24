@@ -57,8 +57,6 @@ type Snapshot struct {
 	SubscriptionID uint `gorm:"index:idx_user_subscription"`
 	Content        string
 	ContentDigest  string
-
-	Subscription Subscription
 }
 
 func (s *Snapshot) BeforeCreate(tx *gorm.DB) error {

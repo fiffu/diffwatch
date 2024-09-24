@@ -59,6 +59,7 @@ func router(cfg *config.Config, log *zap.Logger, svc *lib.Service) http.Handler 
 			r.Post("/", ctrl.onboardUser)
 			r.Post("/{user_id}/subscription", ctrl.subscribe)
 			r.Get("/{user_id}/subscription/{subscription_id}/latest", ctrl.viewSnapshot)
+			r.Post("/{user_id}/subscription/{subscription_id}/push", ctrl.pushSnapshot)
 		})
 	})
 	r.Get("/verify/{nonce}", ctrl.verifyNotifier)
@@ -139,6 +140,19 @@ func (ctrl *controller) viewSnapshot(w http.ResponseWriter, r *http.Request) {
 	snapshotID := chi.URLParam(r, "subscription_id")
 
 	snap, err := ctrl.svc.FindSnapshot(ctx, parseInt(userID), parseInt(snapshotID))
+	if err != nil {
+		ctrl.reject(w, 500, err)
+		return
+	}
+	ctrl.resolve(w, 200, snap.Content)
+}
+
+func (ctrl *controller) pushSnapshot(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := chi.URLParam(r, "user_id")
+	snapshotID := chi.URLParam(r, "subscription_id")
+
+	snap, err := ctrl.svc.PushSnapshot(ctx, parseInt(userID), parseInt(snapshotID))
 	if err != nil {
 		ctrl.reject(w, 500, err)
 		return

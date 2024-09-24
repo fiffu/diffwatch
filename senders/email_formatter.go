@@ -22,20 +22,20 @@ func (ef *snapshotEmailFormat) Body() string {
 	}
 	img := ""
 	if ef.Subscription.ImageURL != "" {
-		img = fmt.Sprintf(`<br><img src="%s"`, ef.Subscription.ImageURL)
+		img = fmt.Sprintf(`<br><img src="%s" width="40%"`, ef.Subscription.ImageURL)
 	}
 	return fmt.Sprintf(
 		`
-			<h3>New changes on <a href="%s">%s</a>:</h1>
-			%s
+			<h3>New changes on <a href="%s">%s</a>:</h3>
 			<br>
 			<pre>%s</pre>
-			<br>
-			Fingerprint: %s
+			%s
+			<br><hr>
+			<span style="font-size: 0.7em; color: #555555;">Fingerprint: %s</span>
 		`,
 		ef.Subscription.Endpoint, title,
-		img,
 		ef.Snapshot.Content,
+		img,
 		ef.Snapshot.ContentDigest,
 	)
 }
