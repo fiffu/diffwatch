@@ -21,7 +21,7 @@ import (
 var mu sync.Mutex
 
 func NewSnapshotter(lc fx.Lifecycle, db *gorm.DB, log *zap.Logger, transport http.RoundTripper, senders senders.Registry) *Snapshotter {
-	wakeupInterval := 5 * time.Second
+	wakeupInterval := 1 * time.Hour
 	subscriptionPollInterval := 1 * time.Hour // poll each subscription every hour
 	noContentTTL := 7 * 24 * time.Hour        // stop polling subscription if no data is returned for the past week
 	snapshotTTL := 14 * 24 * time.Hour        // each snapshot is only preserved for 1 week
