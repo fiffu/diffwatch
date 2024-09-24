@@ -13,12 +13,18 @@ var (
 )
 
 func collectText(n *html.Node) string {
+	if n == nil {
+		return ""
+	}
 	buf := new(bytes.Buffer)
 	recursiveCollect(n, buf)
 	return compactWhitespace(buf.String())
 }
 
 func recursiveCollect(n *html.Node, buf *bytes.Buffer) {
+	if n == nil {
+		return
+	}
 	if n.Type == html.TextNode {
 		buf.WriteString(n.Data)
 	}
