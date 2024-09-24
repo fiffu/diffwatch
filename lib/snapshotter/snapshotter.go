@@ -66,6 +66,14 @@ type Snapshotter struct {
 	snapshotTTL              time.Duration // Purge snapshots older than this
 }
 
+type snapshotMetrics struct {
+	totalSelected int
+	updated       int
+	unchanged     int
+	empty         int
+	errored       int
+}
+
 func (s *Snapshotter) tickerWithImmediateTick(interval time.Duration) *time.Ticker {
 	withImmediateTick := make(chan time.Time, 1)
 
@@ -127,14 +135,6 @@ func (s *Snapshotter) collectSnapshots(ctx context.Context, batchStartTIme time.
 
 	elapsed := time.Now().UTC().Sub(batchStartTIme)
 	s.log.Sugar().Infow("Snapshotter completed", "elapsed_secs", int(elapsed.Seconds()))
-}
-
-type snapshotMetrics struct {
-	totalSelected int
-	updated       int
-	unchanged     int
-	empty         int
-	errored       int
 }
 
 func (m *snapshotMetrics) Add(other *snapshotMetrics) {
@@ -210,7 +210,7 @@ func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *models.
 
 	requestedAt := time.Now().UTC()
 
-	if content != "" {
+	if content.Text != "" {
 		updated, err := s.handleContent(ctx, sub, requestedAt, content)
 		switch {
 		case err != nil:
@@ -230,8 +230,8 @@ func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *models.
 	}
 }
 
-func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscription, timestamp time.Time, content string) (changed bool, err error) {
-	digest := models.DigestContent(content)
+func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscription, timestamp time.Time, content *models.EndpointContent) (changed bool, err error) {
+	digest := models.DigestContent(content.Text)
 
 	var count int64
 	var snap models.Snapshot
@@ -250,7 +250,7 @@ func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscriptio
 	snap.Timestamp = timestamp
 	snap.UserID = sub.UserID
 	snap.SubscriptionID = sub.ID
-	snap.Content = content
+	snap.Content = content.Text
 	snap.ContentDigest = digest
 
 	tx2 := s.db.Clauses(clause.Returning{}).Create(&snap)
@@ -301,7 +301,9 @@ func (s *Snapshotter) purgeOldSnapshots(ctx context.Context, batchStartTime time
 	return
 }
 
-func (s *Snapshotter) GetEndpointContent(ctx context.Context, endpoint, xpath string) (string, error) {
+func (s *Snapshotter) GetEndpointContent(ctx context.Context, endpoint, xpath string) (*models.EndpointContent, error) {
+	ret := &models.EndpointContent{}
+
 	var html string
 	err := requests.URL(endpoint).
 		Transport(s.transport).
@@ -309,10 +311,11 @@ func (s *Snapshotter) GetEndpointContent(ctx context.Context, endpoint, xpath st
 		Fetch(ctx)
 	doc, err := htmlquery.Parse(strings.NewReader(html))
 	if err != nil {
-		return "", err
+		return ret, err
 	}
 
-	node := htmlquery.FindOne(doc, xpath)
-	content := collectText(node)
-	return content, nil
+	ret.Text = SelectText(doc, xpath)
+	ret.Title = SelectText(doc, "/html/head/title")
+	ret.ImageURL = ExtractImageURL(doc)
+	return ret, nil
 }

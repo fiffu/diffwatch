@@ -16,16 +16,27 @@ func (ef *snapshotEmailFormat) Subject() string {
 }
 
 func (ef *snapshotEmailFormat) Body() string {
+	title := ef.Subscription.Title
+	if title == "" {
+		title = ef.Subscription.Endpoint
+	}
+	img := ""
+	if ef.Subscription.ImageURL != "" {
+		img = fmt.Sprintf(`<br><img src="%s"`, ef.Subscription.ImageURL)
+	}
 	return fmt.Sprintf(
 		`
 			<h3>New changes on <a href="%s">%s</a>:</h1>
+			%s
 			<br>
 			<pre>%s</pre>
 			<br>
 			Fingerprint: %s
 		`,
-		ef.Subscription.Endpoint, ef.Subscription.Endpoint,
-		ef.Snapshot.Content, ef.Snapshot.ContentDigest,
+		ef.Subscription.Endpoint, title,
+		img,
+		ef.Snapshot.Content,
+		ef.Snapshot.ContentDigest,
 	)
 }
 

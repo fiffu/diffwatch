@@ -41,6 +41,8 @@ type Subscription struct {
 	NotifierID     uint
 	Endpoint       string `gorm:"index:idx_endpoint_xpath"` // Composite index on endpoint & xpath
 	XPath          string `gorm:"index:idx_endpoint_xpath"`
+	Title          string
+	ImageURL       string
 	LastPollTime   sql.NullTime
 	NoContentSince sql.NullTime
 
