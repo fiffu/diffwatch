@@ -66,11 +66,28 @@ type Snapshotter struct {
 	snapshotTTL              time.Duration // Purge snapshots older than this
 }
 
+func (s *Snapshotter) tickerWithImmediateTick(interval time.Duration) *time.Ticker {
+	withImmediateTick := make(chan time.Time, 1)
+
+	ticker := time.NewTicker(interval)
+	tickerC := ticker.C
+	go func() {
+		withImmediateTick <- time.Now()
+		for c := range tickerC {
+			withImmediateTick <- c
+		}
+	}()
+
+	ticker.C = withImmediateTick
+	return ticker
+}
+
 func (s *Snapshotter) Start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
 
-	ticker := time.NewTicker(s.wakeupInterval)
+	ticker := s.tickerWithImmediateTick(s.wakeupInterval)
+	defer ticker.Stop()
 
 	for {
 		select {
