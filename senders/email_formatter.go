@@ -12,7 +12,7 @@ type snapshotEmailFormat struct {
 }
 
 func (ef *snapshotEmailFormat) Subject() string {
-	return fmt.Sprintf("Diffwatch: new update on %s", ef.Subscription.Endpoint)
+	return fmt.Sprintf("Diffwatch: new update on %s", ef.Subscription.Title)
 }
 
 func (ef *snapshotEmailFormat) Body() string {
@@ -26,14 +26,13 @@ func (ef *snapshotEmailFormat) Body() string {
 	}
 	return fmt.Sprintf(
 		`
-			<h3>New changes on <a href="%s">%s</a>:</h3>
-			<br>
+			<h3>New changes on <a href="%s">%s</a></h3>
 			<pre>%s</pre>
 			%s
 			<br><hr>
 			<span style="font-size: 0.7em; color: #555555;">Fingerprint: %s</span>
 		`,
-		ef.Subscription.Endpoint, title,
+		ef.Subscription.Endpoint, ef.Subscription.Title,
 		ef.Snapshot.Content,
 		img,
 		ef.Snapshot.ContentDigest,
