@@ -125,9 +125,23 @@ func (s *Snapshotter) collectSnapshots(ctx context.Context, batchStartTIme time.
 	m := s.findSubscriptionsForPoll(ctx, batchStartTIme, s.collectBatch)
 
 	if m.totalSelected > 0 {
+		args := make([]any, 0)
+		if m.errored != 0 {
+			args = append(args, "errored", m.errored)
+		}
+		if m.updated != 0 {
+			args = append(args, "updated", m.updated)
+		}
+		if m.unchanged != 0 {
+			args = append(args, "unchanged", m.unchanged)
+		}
+		if m.empty != 0 {
+			args = append(args, "empty", m.empty)
+		}
+
 		s.log.Sugar().Infow(
 			fmt.Sprintf("Processed %d subscriptions", m.totalSelected),
-			"errored", m.errored, "updated", m.updated, "unchanged", m.unchanged, "empty", m.empty,
+			args...,
 		)
 	}
 
