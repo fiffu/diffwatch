@@ -148,7 +148,7 @@ func (s *Snapshotter) collectSnapshots(ctx context.Context, batchStartTIme time.
 	s.purgeOldSnapshots(ctx, batchStartTIme)
 
 	elapsed := time.Now().UTC().Sub(batchStartTIme)
-	s.log.Sugar().Infow("Snapshotter completed", "elapsed_secs", int(elapsed.Seconds()))
+	s.log.Sugar().Infow("Snapshotter completed", "elapsed_msecs", int(elapsed.Milliseconds()))
 }
 
 func (m *snapshotMetrics) Add(other *snapshotMetrics) {
