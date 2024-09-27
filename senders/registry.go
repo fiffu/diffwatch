@@ -11,7 +11,7 @@ import (
 )
 
 type Sender interface {
-	SendSnapshot(ctx context.Context, notifier *models.Notifier, sub *models.Subscription, snapshot *models.Snapshot) (string, error)
+	SendSnapshot(ctx context.Context, notifier *models.Notifier, sub *models.Subscription, before, after *models.Snapshot) (string, error)
 	SendVerification(ctx context.Context, notifier *models.Notifier, verifyURL string) (string, error)
 }
 

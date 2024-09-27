@@ -59,6 +59,8 @@ type Snapshot struct {
 	ContentDigest  string
 }
 
+type Snapshots []Snapshot
+
 func (s *Snapshot) BeforeCreate(tx *gorm.DB) error {
 	s.ContentDigest = DigestContent(s.Content)
 	return nil

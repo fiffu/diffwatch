@@ -62,7 +62,7 @@ func (svc *Service) FindSnapshot(ctx context.Context, userID, subscriptionID uin
 	return snap, nil
 }
 
-func (svc *Service) PushSnapshot(ctx context.Context, userID, subscriptionID uint) (*models.Snapshot, error) {
+func (svc *Service) PushSnapshot(ctx context.Context, userID, subscriptionID uint) (*models.Snapshot, *models.Snapshot, error) {
 	sub := models.Subscription{}
 	tx := svc.db.
 		Where("subscriptions.user_id = ?", userID).
@@ -70,19 +70,26 @@ func (svc *Service) PushSnapshot(ctx context.Context, userID, subscriptionID uin
 		InnerJoins("Notifier").
 		Find(&sub)
 	if err := tx.Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	snap := models.Snapshot{}
+	var snaps models.Snapshots
 	tx = svc.db.
 		Where("user_id = ?", userID).
 		Where("subscription_id = ?", subscriptionID).
 		Order("timestamp desc").
-		First(&snap)
+		Limit(2).
+		Find(&snaps)
 	if err := tx.Error; err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	err := svc.snapshotter.SendSnapshot(ctx, &sub, &snap)
-	return &snap, err
+	var previous, current *models.Snapshot
+	current = &snaps[0]
+	if len(snaps) == 2 {
+		previous = &snaps[1]
+	}
+
+	err := svc.snapshotter.SendSnapshot(ctx, &sub, previous, current)
+	return previous, current, err
 }

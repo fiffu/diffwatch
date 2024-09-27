@@ -7,36 +7,31 @@ import (
 )
 
 type snapshotEmailFormat struct {
-	*models.Subscription
-	*models.Snapshot
+	subscription      *models.Subscription
+	previous, current *models.Snapshot
 }
 
 func (ef *snapshotEmailFormat) Subject() string {
-	return fmt.Sprintf("Diffwatch: new update on %s", ef.Subscription.Title)
+	return fmt.Sprintf("Diffwatch: new update on %s", ef.subscription.Title)
 }
 
 func (ef *snapshotEmailFormat) Body() string {
-	title := ef.Subscription.Title
+	title := ef.subscription.Title
 	if title == "" {
-		title = ef.Subscription.Endpoint
+		title = ef.subscription.Endpoint
 	}
-	img := ""
-	if ef.Subscription.ImageURL != "" {
-		img = fmt.Sprintf(`<br><img src="%s" width="40%"`, ef.Subscription.ImageURL)
+
+	body := ""
+	body += fmt.Sprintf(`<h3>New changes on <a href="%s">%s</a></h3>`, ef.subscription.Endpoint, ef.subscription.Title)
+	if ef.previous != nil {
+		body += fmt.Sprintf(`Previous value: <pre style="padding: 15px; background-color: #eeeeee">%s</pre>`, ef.previous.Content)
 	}
-	return fmt.Sprintf(
-		`
-			<h3>New changes on <a href="%s">%s</a></h3>
-			<pre>%s</pre>
-			%s
-			<br><hr>
-			<span style="font-size: 0.7em; color: #555555;">Fingerprint: %s</span>
-		`,
-		ef.Subscription.Endpoint, ef.Subscription.Title,
-		ef.Snapshot.Content,
-		img,
-		ef.Snapshot.ContentDigest,
-	)
+	body += fmt.Sprintf(`Latest value: <pre style="padding: 15px; background-color: #eeeeee">%s</pre>`, ef.current.Content)
+	if ef.subscription.ImageURL != "" {
+		body += fmt.Sprintf(`<br><img src="%s" width="40%"`, ef.subscription.ImageURL)
+	}
+	body += fmt.Sprintf(`<br><hr><span style="font-size: 0.7em; color: #555555;">Fingerprint: %s</span>`, ef.current.ContentDigest)
+	return body
 }
 
 type verificationEmailFormat struct {

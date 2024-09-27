@@ -175,7 +175,7 @@ func (s *Snapshotter) findSubscriptionsForPoll(
 		FindInBatches(&subs, s.concurrency, func(tx *gorm.DB, batch int) error {
 			batchMetrics, errs := callbackPerBatch(ctx, subs, batchStartTime)
 			if len(errs) > 0 {
-				s.log.Sugar().Errorf("snapshot: batch errors: %+v", errs)
+				s.log.Sugar().Warnf("snapshot: batch errors: %+v", errs)
 			}
 
 			metrics.totalSelected += len(subs)
@@ -218,6 +218,7 @@ func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *models.
 	var m = &snapshotMetrics{}
 	content, err := s.GetEndpointContent(ctx, sub.Endpoint, sub.XPath)
 	if err != nil {
+		s.log.Sugar().Errorw("error collecting snapshot", "err", err)
 		m.errored += 1
 		return m, err
 	}
@@ -228,6 +229,7 @@ func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *models.
 		updated, err := s.handleContent(ctx, sub, requestedAt, content)
 		switch {
 		case err != nil:
+			s.log.Sugar().Errorw("error handling snapshot content", "err", err)
 			m.errored += 1
 
 		case updated:
@@ -239,44 +241,65 @@ func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *models.
 		return m, err
 
 	} else {
-		m.empty += 1
-		return m, s.handleEmptyContent(ctx, sub, requestedAt)
+		err := s.handleEmptyContent(ctx, sub, requestedAt)
+		if err == nil {
+			m.empty += 1
+		} else {
+			m.errored += 1
+		}
+		return m, err
 	}
 }
 
 func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscription, timestamp time.Time, content *models.EndpointContent) (changed bool, err error) {
-	digest := models.DigestContent(content.Text)
+	currDigest := models.DigestContent(content.Text)
 
-	var count int64
-	var snap models.Snapshot
-	tx := s.db.Model(&snap).Where("subscription_id = ? AND content_digest = ?", sub.ID, digest).Count(&count)
-	if err = tx.Error; err != nil {
-		return
-	}
+	var firstSeen bool
+	var prevSnap models.Snapshot
+	tx := s.db.Where("subscription_id = ?", sub.ID).Order("timestamp desc").First(&prevSnap)
 
-	if count == 1 {
-		tx := s.db.Model(&snap).Where("content_digest = ?", digest).Update("timestamp", timestamp)
+	switch tx.Error {
+	case nil:
+		if prevSnap.ContentDigest == currDigest {
+			// Not changed
+			tx := s.db.Model(&prevSnap).Where("timestamp = ?", prevSnap.Timestamp).Update("timestamp", timestamp)
+			err = tx.Error
+			return
+		}
+	case gorm.ErrRecordNotFound:
+		firstSeen = true
+	default:
+		// There is an error
 		err = tx.Error
 		return
 	}
 
 	changed = true
-	snap.Timestamp = timestamp
-	snap.UserID = sub.UserID
-	snap.SubscriptionID = sub.ID
-	snap.Content = content.Text
-	snap.ContentDigest = digest
+	newSnap := models.Snapshot{
+		Timestamp:      timestamp,
+		UserID:         sub.UserID,
+		SubscriptionID: sub.ID,
+		Content:        content.Text,
+		ContentDigest:  currDigest,
+	}
 
-	tx2 := s.db.Clauses(clause.Returning{}).Create(&snap)
+	tx2 := s.db.Clauses(clause.Returning{}).Create(&newSnap)
 	if err = tx2.Error; err != nil {
 		return
 	} else {
-		err = s.SendSnapshot(ctx, sub, &snap)
+		p := &prevSnap
+		if firstSeen {
+			p = nil
+		}
+		err = s.SendSnapshot(ctx, sub, p, &newSnap)
+		if err != nil {
+			s.log.Sugar().Errorw("Failed to send snapshot", "err", err)
+		}
 		return
 	}
 }
 
-func (s *Snapshotter) SendSnapshot(ctx context.Context, sub *models.Subscription, snap *models.Snapshot) error {
+func (s *Snapshotter) SendSnapshot(ctx context.Context, sub *models.Subscription, before, after *models.Snapshot) error {
 	notifier := sub.Notifier
 
 	sender, ok := s.senders[notifier.Platform]
@@ -284,7 +307,7 @@ func (s *Snapshotter) SendSnapshot(ctx context.Context, sub *models.Subscription
 		return fmt.Errorf("unsupported notifier platform: %s", notifier.Platform)
 	}
 
-	_, err := sender.SendSnapshot(ctx, &notifier, sub, snap)
+	_, err := sender.SendSnapshot(ctx, &notifier, sub, before, after)
 	if err != nil {
 		s.log.Sugar().Infow("Failed to send update", "err", err)
 	}

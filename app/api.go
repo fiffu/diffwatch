@@ -152,12 +152,20 @@ func (ctrl *controller) pushSnapshot(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "user_id")
 	snapshotID := chi.URLParam(r, "subscription_id")
 
-	snap, err := ctrl.svc.PushSnapshot(ctx, parseInt(userID), parseInt(snapshotID))
+	prev, curr, err := ctrl.svc.PushSnapshot(ctx, parseInt(userID), parseInt(snapshotID))
 	if err != nil {
 		ctrl.reject(w, 500, err)
 		return
 	}
-	ctrl.resolve(w, 200, snap.Content)
+
+	resp := make(map[string]any)
+	resp["current"] = curr.Content
+	if prev != nil {
+		resp["previous"] = prev.Content
+	} else {
+		resp["previous"] = nil
+	}
+	ctrl.resolve(w, 200, resp)
 }
 
 func (ctrl *controller) verifyNotifier(w http.ResponseWriter, r *http.Request) {

@@ -33,8 +33,8 @@ func (e *mailgunSender) send(ctx context.Context, email emailFormatter, recipien
 	return id, err
 }
 
-func (e *mailgunSender) SendSnapshot(ctx context.Context, notifier *models.Notifier, sub *models.Subscription, snapshot *models.Snapshot) (string, error) {
-	formatter := &snapshotEmailFormat{sub, snapshot}
+func (e *mailgunSender) SendSnapshot(ctx context.Context, notifier *models.Notifier, sub *models.Subscription, before, after *models.Snapshot) (string, error) {
+	formatter := &snapshotEmailFormat{sub, before, after}
 	return e.send(ctx, formatter, notifier.PlatformIdentifier)
 }
 
