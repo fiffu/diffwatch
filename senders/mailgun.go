@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/fiffu/diffwatch/lib/models"
+	"github.com/fiffu/diffwatch/senders/email"
 	"github.com/mailgun/mailgun-go/v4"
 )
 
@@ -34,11 +35,11 @@ func (e *mailgunSender) send(ctx context.Context, email emailFormatter, recipien
 }
 
 func (e *mailgunSender) SendSnapshot(ctx context.Context, notifier *models.Notifier, sub *models.Subscription, before, after *models.Snapshot) (string, error) {
-	formatter := &snapshotEmailFormat{sub, before, after}
+	formatter := &email.SnapshotEmailFormat{Subscription: sub, Previous: before, Current: after}
 	return e.send(ctx, formatter, notifier.PlatformIdentifier)
 }
 
 func (e *mailgunSender) SendVerification(ctx context.Context, notifier *models.Notifier, verifyURL string) (string, error) {
-	formatter := &verificationEmailFormat{verifyURL}
+	formatter := &email.VerificationEmailFormat{VerifyURL: verifyURL}
 	return e.send(ctx, formatter, notifier.PlatformIdentifier)
 }

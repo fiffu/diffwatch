@@ -1,0 +1,18 @@
+<h3>New changes on <a href="{{ .Subscription.Endpoint }}">{{ or .Subscription.Title .Subscription.Endpoint }}</a></h3>
+
+{{ if .Previous }}
+    Previous:
+    <pre style="padding: 15px; background-color: #eeeeee;">{{ .Previous.Content }}</pre>
+{{ end }}
+
+Current:
+<pre style="padding: 15px; background-color: #eeeeee;">{{ .Current.Content }}</pre>
+
+{{ if .Subscription.ImageURL }}
+    <br>
+    <img src="{{ .Subscription.ImageURL }}" width="40%">
+{{ end }}
+
+<br><hr>
+
+<span style="font-size: 0.7em; color: #555555;">Fingerprint: {{ .Current.ContentDigest }}</span>
