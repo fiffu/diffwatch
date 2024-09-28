@@ -70,7 +70,6 @@ type snapshotMetrics struct {
 	totalSelected int
 	updated       int
 	unchanged     int
-	empty         int
 	errored       int
 }
 
@@ -135,9 +134,6 @@ func (s *Snapshotter) collectSnapshots(ctx context.Context, batchStartTIme time.
 		if m.unchanged != 0 {
 			args = append(args, "unchanged", m.unchanged)
 		}
-		if m.empty != 0 {
-			args = append(args, "empty", m.empty)
-		}
 
 		s.log.Sugar().Infow(
 			fmt.Sprintf("Processed %d subscriptions", m.totalSelected),
@@ -155,7 +151,6 @@ func (m *snapshotMetrics) Add(other *snapshotMetrics) {
 	m.totalSelected += other.totalSelected
 	m.updated += other.updated
 	m.unchanged += other.unchanged
-	m.empty += other.empty
 }
 
 func (s *Snapshotter) findSubscriptionsForPoll(
@@ -216,42 +211,36 @@ func (s *Snapshotter) collectBatch(ctx context.Context, batch models.Subscriptio
 
 func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *models.Subscription) (*snapshotMetrics, error) {
 	var m = &snapshotMetrics{}
+	var errMetric = &snapshotMetrics{errored: 1}
+
 	content, err := s.GetEndpointContent(ctx, sub.Endpoint, sub.XPath)
 	if err != nil {
 		s.log.Sugar().Errorw("error collecting snapshot", "err", err)
-		m.errored += 1
-		return m, err
+		return errMetric, err
 	}
 
 	requestedAt := time.Now().UTC()
 
-	if content.Text != "" {
-		updated, err := s.handleContent(ctx, sub, requestedAt, content)
-		switch {
-		case err != nil:
-			s.log.Sugar().Errorw("error handling snapshot content", "err", err)
-			m.errored += 1
-
-		case updated:
-			m.updated += 1
-
-		case !updated:
-			m.unchanged += 1
-		}
-		return m, err
-
-	} else {
-		err := s.handleEmptyContent(ctx, sub, requestedAt)
-		if err == nil {
-			m.empty += 1
-		} else {
-			m.errored += 1
-		}
-		return m, err
+	isChanged, err := s.handleContent(ctx, sub, requestedAt, content)
+	switch {
+	case err != nil:
+		s.log.Sugar().Errorw("error handling snapshot content", "err", err)
+		return errMetric, err
+	case isChanged:
+		m.updated += 1
+	default:
+		m.unchanged += 1
 	}
+
+	if content.Text != "" {
+		if err := s.handleEmptyContent(ctx, sub, requestedAt); err != nil {
+			return errMetric, err
+		}
+	}
+	return m, err
 }
 
-func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscription, timestamp time.Time, content *models.EndpointContent) (changed bool, err error) {
+func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscription, timestamp time.Time, content *models.EndpointContent) (isChanged bool, err error) {
 	currDigest := models.DigestContent(content.Text)
 
 	var firstSeen bool
@@ -259,6 +248,9 @@ func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscriptio
 	tx := s.db.Where("subscription_id = ?", sub.ID).Order("timestamp desc").First(&prevSnap)
 
 	switch tx.Error {
+	case gorm.ErrRecordNotFound:
+		// First time we see this, so this is considered a change
+		firstSeen = true
 	case nil:
 		if prevSnap.ContentDigest == currDigest {
 			// Not changed
@@ -266,15 +258,13 @@ func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscriptio
 			err = tx.Error
 			return
 		}
-	case gorm.ErrRecordNotFound:
-		firstSeen = true
 	default:
 		// There is an error
 		err = tx.Error
 		return
 	}
 
-	changed = true
+	isChanged = true
 	newSnap := models.Snapshot{
 		Timestamp:      timestamp,
 		UserID:         sub.UserID,

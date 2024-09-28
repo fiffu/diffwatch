@@ -6,7 +6,7 @@
 {{ end }}
 
 Current:
-<pre style="padding: 15px; background-color: #eeeeee;">{{ .Current.Content }}</pre>
+<pre style="padding: 15px; background-color: #eeeeee;">{{ or .Current.Content `(empty)` }}</pre>
 
 {{ if .Subscription.ImageURL }}
     <br>
