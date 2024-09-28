@@ -9,7 +9,7 @@ Get notified when URL + XPath changes.
 - [x] Take snapshot using URL and XPath
 - [x] Cronjob to scrape subscriptions
 - [x] Email integration to notify when subscription content changes
-- [ ] Switch from sqlite to Postgres
+- [ ] ~~Switch from sqlite to Postgres~~ (won't do: this remains a locally-hosted project for now, since many sites block VPS traffic)
 - [x] Add `name` attribute for subscriptions (or detect by html title tag)
 - [ ] Security checks, e.g. max retrievable content size
 - [ ] Other notification integrations, e.g. webhooks
