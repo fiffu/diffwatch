@@ -1,4 +1,4 @@
-package app
+package api
 
 import (
 	"context"
@@ -35,7 +35,7 @@ func NewAPI(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, svc *lib.Servi
 }
 
 func router(cfg *config.Config, log *zap.Logger, svc *lib.Service) http.Handler {
-	ctrl := &controller{log, svc}
+	ctrl := &apiController{baseController{log, svc}}
 
 	r := chi.NewRouter()
 
@@ -63,12 +63,12 @@ func router(cfg *config.Config, log *zap.Logger, svc *lib.Service) http.Handler 
 	return r
 }
 
-type controller struct {
+type baseController struct {
 	log *zap.Logger
 	svc *lib.Service
 }
 
-func (ctrl *controller) reject(w http.ResponseWriter, status int, err error) {
+func (ctrl *baseController) reject(w http.ResponseWriter, status int, err error) {
 	if err != nil {
 		http.Error(w, err.Error(), status)
 	} else {
@@ -76,7 +76,7 @@ func (ctrl *controller) reject(w http.ResponseWriter, status int, err error) {
 	}
 }
 
-func (ctrl *controller) resolve(w http.ResponseWriter, status int, body any) {
+func (ctrl *baseController) resolve(w http.ResponseWriter, status int, body any) {
 	if b, err := json.Marshal(body); err != nil {
 		ctrl.reject(w, http.StatusInternalServerError, err)
 		ctrl.log.Sugar().Error("Request failed", "error", err)
@@ -89,7 +89,7 @@ func (ctrl *controller) resolve(w http.ResponseWriter, status int, body any) {
 	}
 }
 
-func (ctrl *controller) getPagination(r *http.Request) (limit, offset int) {
+func (ctrl *baseController) getPagination(r *http.Request) (limit, offset int) {
 	limit = 5
 	offset = 0
 	if perPage := r.FormValue("perPage"); perPage != "" {
@@ -102,7 +102,11 @@ func (ctrl *controller) getPagination(r *http.Request) (limit, offset int) {
 	return
 }
 
-func (ctrl *controller) onboardUser(w http.ResponseWriter, r *http.Request) {
+type apiController struct {
+	baseController
+}
+
+func (ctrl *apiController) onboardUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	email := r.FormValue("email")
 	password := r.FormValue("password")
@@ -124,7 +128,7 @@ func (ctrl *controller) onboardUser(w http.ResponseWriter, r *http.Request) {
 	ctrl.resolve(w, http.StatusAccepted, user)
 }
 
-func (ctrl *controller) subscribe(w http.ResponseWriter, r *http.Request) {
+func (ctrl *apiController) subscribe(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := chi.URLParam(r, "user_id")
 	endpoint := r.FormValue("endpoint")
@@ -143,7 +147,7 @@ func (ctrl *controller) subscribe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (ctrl *controller) listSubscriptions(w http.ResponseWriter, r *http.Request) {
+func (ctrl *apiController) listSubscriptions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := chi.URLParam(r, "user_id")
 	limit, offset := ctrl.getPagination(r)
@@ -157,7 +161,7 @@ func (ctrl *controller) listSubscriptions(w http.ResponseWriter, r *http.Request
 	ctrl.resolve(w, 200, repr)
 }
 
-func (ctrl *controller) viewSnapshot(w http.ResponseWriter, r *http.Request) {
+func (ctrl *apiController) viewSnapshot(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := chi.URLParam(r, "user_id")
 	snapshotID := chi.URLParam(r, "subscription_id")
@@ -170,7 +174,7 @@ func (ctrl *controller) viewSnapshot(w http.ResponseWriter, r *http.Request) {
 	ctrl.resolve(w, 200, snap.Content)
 }
 
-func (ctrl *controller) pushSnapshot(w http.ResponseWriter, r *http.Request) {
+func (ctrl *apiController) pushSnapshot(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := chi.URLParam(r, "user_id")
 	snapshotID := chi.URLParam(r, "subscription_id")
@@ -191,7 +195,7 @@ func (ctrl *controller) pushSnapshot(w http.ResponseWriter, r *http.Request) {
 	ctrl.resolve(w, 200, resp)
 }
 
-func (ctrl *controller) verifyNotifier(w http.ResponseWriter, r *http.Request) {
+func (ctrl *apiController) verifyNotifier(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	nonce := chi.URLParam(r, "nonce")
 
