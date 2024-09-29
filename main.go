@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/fiffu/diffwatch/app"
-	"github.com/fiffu/diffwatch/app/api"
 	"github.com/fiffu/diffwatch/config"
 	"github.com/fiffu/diffwatch/lib"
 	"github.com/fiffu/diffwatch/lib/snapshotter"
@@ -42,7 +41,7 @@ func main() {
 		fx.Provide(lib.NewService),
 		fx.Provide(app.NewDatabase),
 		fx.Provide(app.NewTransport),
-		fx.Provide(api.NewAPI),
+		fx.Provide(app.NewAPI),
 
 		fx.Invoke(func(*http.Server) {}),
 	).Run()
