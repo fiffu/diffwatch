@@ -34,7 +34,11 @@ type SnapshotEmailFormat struct {
 }
 
 func (ef *SnapshotEmailFormat) Subject() string {
-	return fmt.Sprintf("Diffwatch: new update on %s", ef.Subscription.Title)
+	re := ""
+	if ef.Previous != nil {
+		re = "Re: "
+	}
+	return fmt.Sprintf("%sDiffwatch: new update on %s", re, ef.Subscription.Title)
 }
 
 func (ef *SnapshotEmailFormat) Body() string {
