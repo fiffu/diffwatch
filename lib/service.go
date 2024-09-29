@@ -49,6 +49,20 @@ func (svc *Service) VerifyNotifier(ctx context.Context, nonce string) (bool, err
 	return true, nil
 }
 
+func (svc *Service) ListSubscriptions(ctx context.Context, userID uint, limit, offset int) ([]*models.Subscription, error) {
+	var subs models.Subscriptions
+	tx := svc.db.
+		Where("subscriptions.user_id = ?", userID).
+		Order("subscriptions.id desc").
+		InnerJoins("Notifier").
+		Limit(limit).Offset(offset).
+		Find(&subs)
+	if err := tx.Error; err != nil {
+		return nil, err
+	}
+	return subs, nil
+}
+
 func (svc *Service) FindSnapshot(ctx context.Context, userID, subscriptionID uint) (*models.Snapshot, error) {
 	snap := &models.Snapshot{}
 	tx := svc.db.

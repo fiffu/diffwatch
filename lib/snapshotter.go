@@ -192,7 +192,7 @@ func (s *Snapshotter) collectBatch(ctx context.Context, batch models.Subscriptio
 
 		go func() {
 			defer wg.Done()
-			m, err := s.collectRecurringSnapshot(ctx, &sub)
+			m, err := s.collectRecurringSnapshot(ctx, sub)
 			if err != nil {
 				errs = append(errs, err)
 			}

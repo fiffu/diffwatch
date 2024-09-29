@@ -11,6 +11,7 @@ import (
 
 	"github.com/fiffu/diffwatch/config"
 	"github.com/fiffu/diffwatch/lib"
+	"github.com/fiffu/diffwatch/lib/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"go.uber.org/fx"
@@ -52,6 +53,7 @@ func router(cfg *config.Config, log *zap.Logger, svc *lib.Service) http.Handler 
 		r.Route("/users", func(r chi.Router) {
 			r.Post("/", ctrl.onboardUser)
 			r.Post("/{user_id}/subscriptions", ctrl.subscribe)
+			r.Get("/{user_id}/subscriptions", ctrl.listSubscriptions)
 			r.Get("/{user_id}/subscriptions/{subscription_id}/latest", ctrl.viewSnapshot)
 			r.Post("/{user_id}/subscriptions/{subscription_id}/push", ctrl.pushSnapshot)
 		})
@@ -87,6 +89,19 @@ func (ctrl *controller) resolve(w http.ResponseWriter, status int, body any) {
 	}
 }
 
+func (ctrl *controller) getPagination(r *http.Request) (limit, offset int) {
+	limit = 5
+	offset = 0
+	if perPage := r.FormValue("perPage"); perPage != "" {
+		limit = parseInt(perPage)
+	}
+	if page := r.FormValue("page"); page != "" {
+		pageIndex := parseInt(page) - 1
+		offset = pageIndex * limit
+	}
+	return
+}
+
 func (ctrl *controller) onboardUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	email := r.FormValue("email")
@@ -115,7 +130,7 @@ func (ctrl *controller) subscribe(w http.ResponseWriter, r *http.Request) {
 	endpoint := r.FormValue("endpoint")
 	xpath := r.FormValue("xpath")
 
-	snap, sub, err := ctrl.svc.CreateSubscription(ctx, parseInt(userID), endpoint, xpath)
+	snap, sub, err := ctrl.svc.CreateSubscription(ctx, parseUint(userID), endpoint, xpath)
 	if err != nil {
 		ctrl.reject(w, 500, err)
 		return
@@ -128,12 +143,26 @@ func (ctrl *controller) subscribe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (ctrl *controller) listSubscriptions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := chi.URLParam(r, "user_id")
+	limit, offset := ctrl.getPagination(r)
+
+	subs, err := ctrl.svc.ListSubscriptions(ctx, parseUint(userID), limit, offset)
+	if err != nil {
+		ctrl.reject(w, 500, err)
+		return
+	}
+	repr := FromMany[*models.Subscription, SubscriptionView](subs)
+	ctrl.resolve(w, 200, repr)
+}
+
 func (ctrl *controller) viewSnapshot(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := chi.URLParam(r, "user_id")
 	snapshotID := chi.URLParam(r, "subscription_id")
 
-	snap, err := ctrl.svc.FindSnapshot(ctx, parseInt(userID), parseInt(snapshotID))
+	snap, err := ctrl.svc.FindSnapshot(ctx, parseUint(userID), parseUint(snapshotID))
 	if err != nil {
 		ctrl.reject(w, 500, err)
 		return
@@ -146,7 +175,7 @@ func (ctrl *controller) pushSnapshot(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "user_id")
 	snapshotID := chi.URLParam(r, "subscription_id")
 
-	prev, curr, err := ctrl.svc.PushSnapshot(ctx, parseInt(userID), parseInt(snapshotID))
+	prev, curr, err := ctrl.svc.PushSnapshot(ctx, parseUint(userID), parseUint(snapshotID))
 	if err != nil {
 		ctrl.reject(w, 500, err)
 		return
@@ -174,7 +203,11 @@ func (ctrl *controller) verifyNotifier(w http.ResponseWriter, r *http.Request) {
 	ctrl.resolve(w, http.StatusOK, map[string]any{"verified": ok})
 }
 
-func parseInt(s string) uint {
+func parseInt(s string) int {
+	return int(parseUint(s))
+}
+
+func parseUint(s string) uint {
 	u, _ := strconv.ParseUint(s, 10, 64)
 	return uint(u)
 }

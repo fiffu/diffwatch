@@ -20,4 +20,4 @@ type Subscription struct {
 	Notifier Notifier
 }
 
-type Subscriptions []Subscription
+type Subscriptions []*Subscription
