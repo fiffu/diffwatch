@@ -49,17 +49,11 @@ func router(cfg *config.Config, log *zap.Logger, svc *lib.Service) http.Handler 
 	})
 
 	r.Route("/api", func(r chi.Router) {
-		if creds := cfg.GetCreds(); len(creds) > 0 {
-			r.Use(middleware.BasicAuth("diffwatch", creds))
-		} else {
-			log.Sugar().Info("Auth is disabled since no credentials are defined")
-		}
-
 		r.Route("/users", func(r chi.Router) {
 			r.Post("/", ctrl.onboardUser)
-			r.Post("/{user_id}/subscription", ctrl.subscribe)
-			r.Get("/{user_id}/subscription/{subscription_id}/latest", ctrl.viewSnapshot)
-			r.Post("/{user_id}/subscription/{subscription_id}/push", ctrl.pushSnapshot)
+			r.Post("/{user_id}/subscriptions", ctrl.subscribe)
+			r.Get("/{user_id}/subscriptions/{subscription_id}/latest", ctrl.viewSnapshot)
+			r.Post("/{user_id}/subscriptions/{subscription_id}/push", ctrl.pushSnapshot)
 		})
 	})
 	r.Get("/verify/{nonce}", ctrl.verifyNotifier)
