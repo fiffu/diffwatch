@@ -1,126 +1,17 @@
-package lib
+package snapshotter
 
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/antchfx/htmlquery"
-	"github.com/carlmjohnson/requests"
 	"github.com/fiffu/diffwatch/lib/models"
-	"github.com/fiffu/diffwatch/senders"
-	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-var mu sync.Mutex
-
-func NewSnapshotter(lc fx.Lifecycle, db *gorm.DB, log *zap.Logger, transport http.RoundTripper, senders senders.Registry) *Snapshotter {
-	wakeupInterval := 1 * time.Hour
-	subscriptionPollInterval := 1 * time.Hour // poll each subscription every hour
-	noContentTTL := 7 * 24 * time.Hour        // stop polling subscription if no data is returned for the past week
-	snapshotTTL := 14 * 24 * time.Hour        // each snapshot is only preserved for 1 week
-
-	concurrency := 5
-	var mu sync.Mutex
-
-	snapshotter := Snapshotter{
-		db, log, transport, senders,
-		&mu, concurrency, nil,
-		wakeupInterval, subscriptionPollInterval, noContentTTL, snapshotTTL,
-	}
-
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			go snapshotter.Start()
-			return nil
-		},
-		OnStop: func(ctx context.Context) error {
-			log.Sugar().Info("Trying to stop snapshotter")
-			snapshotter.Stop()
-			return nil
-		},
-	})
-
-	return &snapshotter
-}
-
-type Snapshotter struct {
-	db        *gorm.DB
-	log       *zap.Logger
-	transport http.RoundTripper
-	senders   senders.Registry
-
-	mu          *sync.Mutex
-	concurrency int
-	cancel      context.CancelFunc
-
-	wakeupInterval           time.Duration // Interval to check for pollable subscriptions
-	subscriptionPollInterval time.Duration // We only poll this subscription when the last poll this long ago
-	noContentTTL             time.Duration // Purge subscription if it has no content for this duration
-	snapshotTTL              time.Duration // Purge snapshots older than this
-}
-
-type snapshotMetrics struct {
-	totalSelected int
-	updated       int
-	unchanged     int
-	errored       int
-}
-
-func (s *Snapshotter) tickerWithImmediateTick(interval time.Duration) *time.Ticker {
-	withImmediateTick := make(chan time.Time, 1)
-
-	ticker := time.NewTicker(interval)
-	tickerC := ticker.C
-	go func() {
-		withImmediateTick <- time.Now()
-		for c := range tickerC {
-			withImmediateTick <- c
-		}
-	}()
-
-	ticker.C = withImmediateTick
-	return ticker
-}
-
-func (s *Snapshotter) Start() {
-	ctx, cancel := context.WithCancel(context.Background())
-	s.cancel = cancel
-
-	ticker := s.tickerWithImmediateTick(s.wakeupInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			// Locking here to wait for in-flight requests to finish
-			mu.Lock()
-
-			s.log.Sugar().Info("Snapshotter stopped")
-			return
-
-		case batchStartTime := <-ticker.C:
-			s.collectSnapshots(ctx, batchStartTime.UTC())
-		}
-	}
-}
-
-func (s *Snapshotter) Stop() {
-	if s.cancel != nil {
-		s.cancel()
-	}
-}
-
-func (s *Snapshotter) collectSnapshots(ctx context.Context, batchStartTIme time.Time) {
-	mu.Lock()
-	defer mu.Unlock()
-
+func (s *Snapshotter) pollSnapshots(ctx context.Context, batchStartTIme time.Time) {
 	m := s.findSubscriptionsForPoll(ctx, batchStartTIme, s.collectBatch)
 
 	if m.totalSelected > 0 {
@@ -145,12 +36,6 @@ func (s *Snapshotter) collectSnapshots(ctx context.Context, batchStartTIme time.
 
 	elapsed := time.Now().UTC().Sub(batchStartTIme)
 	s.log.Sugar().Infow("Snapshotter completed", "elapsed_msecs", int(elapsed.Milliseconds()))
-}
-
-func (m *snapshotMetrics) Add(other *snapshotMetrics) {
-	m.totalSelected += other.totalSelected
-	m.updated += other.updated
-	m.unchanged += other.unchanged
 }
 
 func (s *Snapshotter) findSubscriptionsForPoll(
@@ -289,21 +174,6 @@ func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscriptio
 	}
 }
 
-func (s *Snapshotter) SendSnapshot(ctx context.Context, sub *models.Subscription, before, after *models.Snapshot) error {
-	notifier := sub.Notifier
-
-	sender, ok := s.senders[notifier.Platform]
-	if !ok {
-		return fmt.Errorf("unsupported notifier platform: %s", notifier.Platform)
-	}
-
-	_, err := sender.SendSnapshot(ctx, &notifier, sub, before, after)
-	if err != nil {
-		s.log.Sugar().Infow("Failed to send update", "err", err)
-	}
-	return err
-}
-
 func (s *Snapshotter) handleEmptyContent(ctx context.Context, sub *models.Subscription, timestamp time.Time) error {
 	if sub.NoContentSince.Valid {
 		// Don't do anything if we already observed empty content on this subscription
@@ -326,23 +196,4 @@ func (s *Snapshotter) purgeOldSnapshots(ctx context.Context, batchStartTime time
 		s.log.Sugar().Infof("Purged %d old snapshots", tx.RowsAffected)
 	}
 	return
-}
-
-func (s *Snapshotter) GetEndpointContent(ctx context.Context, endpoint, xpath string) (*models.EndpointContent, error) {
-	ret := &models.EndpointContent{}
-
-	var html string
-	err := requests.URL(endpoint).
-		Transport(s.transport).
-		ToString(&html).
-		Fetch(ctx)
-	doc, err := htmlquery.Parse(strings.NewReader(html))
-	if err != nil {
-		return ret, err
-	}
-
-	ret.Text = SelectText(doc, xpath)
-	ret.Title = SelectText(doc, "/html/head/title")
-	ret.ImageURL = ExtractImageURL(doc)
-	return ret, nil
 }

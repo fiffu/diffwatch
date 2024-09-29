@@ -6,6 +6,7 @@ import (
 
 	"github.com/fiffu/diffwatch/config"
 	"github.com/fiffu/diffwatch/lib/models"
+	"github.com/fiffu/diffwatch/lib/snapshotter"
 	"github.com/fiffu/diffwatch/senders"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -18,12 +19,12 @@ type Service struct {
 	db      *gorm.DB
 	senders senders.Registry
 
-	snapshotter *Snapshotter
+	snapshotter *snapshotter.Snapshotter
 	*onboardUser
 	*subscribe
 }
 
-func NewService(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, db *gorm.DB, snapshotter *Snapshotter, senders senders.Registry) *Service {
+func NewService(lc fx.Lifecycle, cfg *config.Config, log *zap.Logger, db *gorm.DB, snapshotter *snapshotter.Snapshotter, senders senders.Registry) *Service {
 	return &Service{
 		cfg, log, db, senders,
 		snapshotter,

@@ -8,6 +8,7 @@ import (
 
 	"github.com/fiffu/diffwatch/config"
 	"github.com/fiffu/diffwatch/lib/models"
+	"github.com/fiffu/diffwatch/lib/snapshotter"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -17,7 +18,7 @@ type subscribe struct {
 	cfg   *config.Config
 	log   *zap.Logger
 	db    *gorm.DB
-	snaps *Snapshotter
+	snaps *snapshotter.Snapshotter
 }
 
 func (svc *subscribe) CreateSubscription(ctx context.Context, userID uint, endpoint, xpath string) (*models.Snapshot, *models.Subscription, error) {
