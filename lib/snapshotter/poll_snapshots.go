@@ -43,12 +43,12 @@ func (s *Snapshotter) findSubscriptionsForPoll(
 	batchStartTime time.Time,
 	callbackPerBatch func(context.Context, models.Subscriptions, time.Time) (*snapshotMetrics, []error),
 ) *snapshotMetrics {
-	lastPollCutoff := batchStartTime.Add(-s.subscriptionPollInterval)
+	lastPollCutoff := batchStartTime.Add(-s.pollInterval)
 	noContentCutoff := batchStartTime.Add(-s.noContentTTL)
 
 	var subs models.Subscriptions
 	var metrics = &snapshotMetrics{}
-	s.db.
+	tx := s.db.
 		Where("no_content_since IS NULL OR no_content_since > ?", noContentCutoff).
 		Where("last_poll_time IS NULL OR last_poll_time <= ?", lastPollCutoff).
 		InnerJoins("Notifier").
@@ -63,6 +63,9 @@ func (s *Snapshotter) findSubscriptionsForPoll(
 
 			return nil
 		})
+	if err := tx.Error; err != nil {
+		s.log.Sugar().Infof("Failed to fetch pollable subscriptions, err: %v", err)
+	}
 
 	return metrics
 }
@@ -77,7 +80,7 @@ func (s *Snapshotter) collectBatch(ctx context.Context, batch models.Subscriptio
 
 		go func() {
 			defer wg.Done()
-			m, err := s.collectRecurringSnapshot(ctx, sub)
+			m, err := s.snapshotAndNotify(ctx, sub)
 			if err != nil {
 				errs = append(errs, err)
 			}
@@ -94,7 +97,7 @@ func (s *Snapshotter) collectBatch(ctx context.Context, batch models.Subscriptio
 	return metrics, errs
 }
 
-func (s *Snapshotter) collectRecurringSnapshot(ctx context.Context, sub *models.Subscription) (*snapshotMetrics, error) {
+func (s *Snapshotter) snapshotAndNotify(ctx context.Context, sub *models.Subscription) (*snapshotMetrics, error) {
 	var m = &snapshotMetrics{}
 	var errMetric = &snapshotMetrics{errored: 1}
 
@@ -157,21 +160,31 @@ func (s *Snapshotter) handleContent(ctx context.Context, sub *models.Subscriptio
 		Content:        content.Text,
 		ContentDigest:  currDigest,
 	}
-
 	tx2 := s.db.Clauses(clause.Returning{}).Create(&newSnap)
 	if err = tx2.Error; err != nil {
 		return
-	} else {
-		p := &prevSnap
-		if firstSeen {
-			p = nil
-		}
-		err = s.SendSnapshot(ctx, sub, p, &newSnap)
-		if err != nil {
-			s.log.Sugar().Errorw("Failed to send snapshot", "err", err)
-		}
+	}
+
+	p := &prevSnap
+	if firstSeen {
+		p = nil
+	}
+	if err = s.SendSnapshot(ctx, sub, p, &newSnap); err != nil {
+		s.log.Sugar().Errorw("Failed to send snapshot", "err", err)
 		return
 	}
+
+	chaser := models.Chaser{
+		SubscriptionID: sub.ID,
+		NotifierID:     sub.NotifierID,
+		NotBefore:      timestamp.Add(s.chaseInterval),
+	}
+	tx3 := s.db.Create(&chaser)
+	if err = tx3.Error; err != nil {
+		s.log.Sugar().Errorw("Failed to schedule chaser", "subscription_id", sub.ID, "err", err)
+		return
+	}
+	return
 }
 
 func (s *Snapshotter) handleEmptyContent(ctx context.Context, sub *models.Subscription, timestamp time.Time) error {

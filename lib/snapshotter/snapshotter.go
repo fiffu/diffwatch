@@ -20,17 +20,18 @@ import (
 var mu sync.Mutex
 
 func NewSnapshotter(lc fx.Lifecycle, db *gorm.DB, log *zap.Logger, transport http.RoundTripper, senders senders.Registry) *Snapshotter {
-	wakeupInterval := 1 * time.Hour           // Interval to check for pollable subscriptions
-	subscriptionPollInterval := 1 * time.Hour // poll each subscription every hour
-	noContentTTL := 7 * 24 * time.Hour        // stop polling subscription if no data is returned for the past week
-	snapshotTTL := 14 * 24 * time.Hour        // each snapshot is only preserved for 1 week
+	wakeupInterval := 1 * time.Hour    // interval to check for pollable subscriptions
+	pollInterval := 1 * time.Hour      // poll each subscription every hour
+	chaseInterval := 10 * time.Minute  // if subscription updated, check again after this duration
+	noContentTTL := 7 * 24 * time.Hour // stop polling subscription if no data is returned for the past week
+	snapshotTTL := 14 * 24 * time.Hour // each snapshot is only preserved for 1 week
 
 	concurrency := 5
 
 	snapshotter := Snapshotter{
 		db, log, transport, senders,
 		&mu, concurrency, NewAlarmClock(wakeupInterval),
-		subscriptionPollInterval, noContentTTL, snapshotTTL,
+		pollInterval, chaseInterval, noContentTTL, snapshotTTL,
 	}
 
 	lc.Append(fx.Hook{
@@ -58,9 +59,10 @@ type Snapshotter struct {
 	concurrency int
 	alarmClock  *alarmClock
 
-	subscriptionPollInterval time.Duration // We only poll this subscription when the last poll this long ago
-	noContentTTL             time.Duration // Purge subscription if it has no content for this duration
-	snapshotTTL              time.Duration // Purge snapshots older than this
+	pollInterval  time.Duration // We only poll this subscription when the last poll this long ago
+	chaseInterval time.Duration // When a subscription is updated, we'll poll it again after this duration
+	noContentTTL  time.Duration // Purge subscription if it has no content for this duration
+	snapshotTTL   time.Duration // Purge snapshots older than this
 }
 
 func (s *Snapshotter) Start(ctx context.Context) {
@@ -75,7 +77,7 @@ func (s *Snapshotter) Start(ctx context.Context) {
 
 func (s *Snapshotter) Stop() {
 	mu.Lock()
-	s.Stop()
+	s.alarmClock.Stop()
 	s.log.Sugar().Info("Snapshotter stopped")
 }
 
@@ -87,11 +89,11 @@ func (s *Snapshotter) handleEvent(evt Event) {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	switch event := evt.(type) {
+	switch evt.(type) {
 	case pollWakeupEvent:
 		s.pollSnapshots(ctx, evt.Timestamp())
 	case chaseWakeupEvent:
-		s.chaseSubscription(ctx, evt.Timestamp(), event.SubscriptionID)
+		s.chaseSubscriptions(ctx, evt.Timestamp())
 	}
 }
 

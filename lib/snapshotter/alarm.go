@@ -19,20 +19,19 @@ type pollWakeupEvent struct {
 
 type chaseWakeupEvent struct {
 	event
-	SubscriptionID uint
 }
 
 type alarmClock struct {
 	cancel      func()
 	wakeupTimer *time.Ticker
-	chaseC      chan chaseWakeupEvent
+	chaseTimer  *time.Ticker
 	C           chan Event
 }
 
 func NewAlarmClock(wakeupInterval time.Duration) *alarmClock {
 	return &alarmClock{
 		wakeupTimer: time.NewTicker(wakeupInterval),
-		chaseC:      make(chan chaseWakeupEvent),
+		chaseTimer:  time.NewTicker(5 * time.Minute),
 		C:           make(chan Event),
 	}
 }
@@ -49,8 +48,8 @@ func (a *alarmClock) Start(ctx context.Context) <-chan Event {
 		case t := <-a.wakeupTimer.C:
 			a.C <- pollWakeupEvent{event{t}}
 
-		case chaseEvent := <-a.chaseC:
-			a.C <- chaseEvent
+		case t := <-a.chaseTimer.C:
+			a.C <- chaseWakeupEvent{event{t}}
 
 		case <-ctx.Done():
 			return
@@ -63,6 +62,6 @@ func (a *alarmClock) Start(ctx context.Context) <-chan Event {
 func (a *alarmClock) Stop() {
 	a.cancel()
 	a.wakeupTimer.Stop()
-	close(a.chaseC)
+	a.chaseTimer.Stop()
 	close(a.C)
 }
