@@ -20,7 +20,7 @@ import (
 var mu sync.Mutex
 
 func NewSnapshotter(lc fx.Lifecycle, db *gorm.DB, log *zap.Logger, transport http.RoundTripper, senders senders.Registry) *Snapshotter {
-	wakeupInterval := 1 * time.Hour    // interval to check for pollable subscriptions
+	wakeupInterval := 30 * time.Minute // interval to check for pollable subscriptions
 	pollInterval := 1 * time.Hour      // poll each subscription every hour
 	chaseInterval := 10 * time.Minute  // if subscription updated, check again after this duration
 	noContentTTL := 7 * 24 * time.Hour // stop polling subscription if no data is returned for the past week
