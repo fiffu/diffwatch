@@ -23,6 +23,7 @@ func NewDatabase(lc fx.Lifecycle, log *zap.Logger) *gorm.DB {
 		&models.Subscription{},
 		&models.User{},
 		&models.Snapshot{},
+		&models.Chaser{},
 	)
 	return db
 }
