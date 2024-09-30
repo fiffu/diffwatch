@@ -77,11 +77,12 @@ func (ctrl *baseController) reject(w http.ResponseWriter, status int, err error)
 }
 
 func (ctrl *baseController) resolve(w http.ResponseWriter, status int, body any) {
-	if b, err := json.Marshal(body); err != nil {
+	if b, err := json.MarshalIndent(body, "", "  "); err != nil {
 		ctrl.reject(w, http.StatusInternalServerError, err)
 		ctrl.log.Sugar().Error("Request failed", "error", err)
 		return
 	} else {
+		b = append(b, '\n')
 		w.WriteHeader(status)
 		if b != nil {
 			w.Write(b)
@@ -171,7 +172,11 @@ func (ctrl *apiController) viewSnapshot(w http.ResponseWriter, r *http.Request) 
 		ctrl.reject(w, 500, err)
 		return
 	}
-	ctrl.resolve(w, 200, snap.Content)
+	ctrl.resolve(w, 200, map[string]any{
+		"timestamp":      ISOFormatTime(snap.Timestamp),
+		"content":        snap.Content,
+		"content_digest": snap.ContentDigest,
+	})
 }
 
 func (ctrl *apiController) pushSnapshot(w http.ResponseWriter, r *http.Request) {

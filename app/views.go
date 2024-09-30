@@ -42,8 +42,8 @@ func (view SubscriptionView) From(entity *models.Subscription) SubscriptionView 
 		XPath:          entity.XPath,
 		Title:          entity.Title,
 		ImageURL:       entity.ImageURL,
-		LastPollTime:   isoformat(entity.LastPollTime),
-		NoContentSince: isoformat(entity.NoContentSince),
+		LastPollTime:   ISOFormatSQLTime(entity.LastPollTime),
+		NoContentSince: ISOFormatSQLTime(entity.NoContentSince),
 	}
 }
 
@@ -60,9 +60,18 @@ func FromMany[T any, U Fromable[T, U]](elems []T) []U {
 	return out
 }
 
-func isoformat(t sql.NullTime) *string {
-	if t.Valid {
-		t.Time.UTC().Format(time.RFC3339)
+func ISOFormatSQLTime(t sql.NullTime) *string {
+	if !t.Valid {
+		return nil
 	}
-	return nil
+	s := t.Time.UTC().Format(time.RFC3339)
+	return &s
+}
+
+func ISOFormatTime(t time.Time) *string {
+	if t.IsZero() {
+		return nil
+	}
+	s := t.UTC().Format(time.RFC3339)
+	return &s
 }
