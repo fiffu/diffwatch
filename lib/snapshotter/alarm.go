@@ -13,6 +13,14 @@ type event struct{ timestamp time.Time }
 
 func (e event) Timestamp() time.Time { return e.timestamp }
 
+type alarmStartupEvent struct {
+	event
+}
+
+type alarmShutdownEvent struct {
+	event
+}
+
 type pollWakeupEvent struct {
 	event
 }
@@ -28,31 +36,48 @@ type alarmClock struct {
 	C           chan Event
 }
 
-func NewAlarmClock(wakeupInterval time.Duration) *alarmClock {
+type IntervalsConfig struct {
+	Wakeup time.Duration
+	Chase  time.Duration
+}
+
+func NewAlarmClock(intervals IntervalsConfig) *alarmClock {
 	return &alarmClock{
-		wakeupTimer: time.NewTicker(wakeupInterval),
-		chaseTimer:  time.NewTicker(5 * time.Minute),
+		wakeupTimer: time.NewTicker(intervals.Wakeup),
+		chaseTimer:  time.NewTicker(intervals.Chase),
+		cancel:      nil,
 		C:           make(chan Event),
 	}
 }
 
-func (a *alarmClock) Start(ctx context.Context) <-chan Event {
-	ctx, cancel := context.WithCancel(ctx)
+func (a *alarmClock) newEvent() event {
+	return event{time.Now().UTC()}
+}
+
+func (a *alarmClock) buildEvent(t time.Time) event {
+	return event{t}
+}
+
+func (a *alarmClock) Start() <-chan Event {
+	alarmCtx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 
 	go func() {
-		immediateWakeupEvent := pollWakeupEvent{event{time.Now()}}
-		a.C <- immediateWakeupEvent
+		a.C <- alarmStartupEvent{a.newEvent()}
 
-		select {
-		case t := <-a.wakeupTimer.C:
-			a.C <- pollWakeupEvent{event{t}}
+		for {
+			select {
+			case t := <-a.wakeupTimer.C:
+				a.C <- pollWakeupEvent{a.buildEvent(t)}
 
-		case t := <-a.chaseTimer.C:
-			a.C <- chaseWakeupEvent{event{t}}
+			case t := <-a.chaseTimer.C:
+				a.C <- chaseWakeupEvent{a.buildEvent(t)}
 
-		case <-ctx.Done():
-			return
+			case <-alarmCtx.Done():
+				a.C <- alarmShutdownEvent{a.newEvent()}
+				close(a.C)
+				return
+			}
 		}
 	}()
 
@@ -63,5 +88,4 @@ func (a *alarmClock) Stop() {
 	a.cancel()
 	a.wakeupTimer.Stop()
 	a.chaseTimer.Stop()
-	close(a.C)
 }

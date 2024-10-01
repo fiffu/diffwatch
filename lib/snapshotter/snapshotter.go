@@ -30,7 +30,7 @@ func NewSnapshotter(lc fx.Lifecycle, db *gorm.DB, log *zap.Logger, transport htt
 
 	snapshotter := Snapshotter{
 		db, log, transport, senders,
-		&mu, concurrency, NewAlarmClock(wakeupInterval),
+		&mu, concurrency, NewAlarmClock(IntervalsConfig{Wakeup: wakeupInterval, Chase: chaseInterval}),
 		pollInterval, chaseInterval, noContentTTL, snapshotTTL,
 	}
 
@@ -66,7 +66,7 @@ type Snapshotter struct {
 }
 
 func (s *Snapshotter) Start(ctx context.Context) {
-	c := s.alarmClock.Start(ctx)
+	c := s.alarmClock.Start()
 
 	go func() {
 		for evt := range c {
@@ -90,8 +90,12 @@ func (s *Snapshotter) handleEvent(evt Event) {
 	defer cancel()
 
 	switch evt.(type) {
+	case alarmStartupEvent:
+		s.pollSnapshots(ctx, evt.Timestamp())
+
 	case pollWakeupEvent:
 		s.pollSnapshots(ctx, evt.Timestamp())
+
 	case chaseWakeupEvent:
 		s.chaseSubscriptions(ctx, evt.Timestamp())
 	}
